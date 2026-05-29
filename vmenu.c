@@ -1271,8 +1271,9 @@ static void
 usage(void)
 {
 	die("usage: vmenu [-b|--bottom] [-c|--centered] [-f|--fast] [-i|--case-insensitive]\n"
-	    "             [-n|--instant] [-v|--version] [-g|--generate-config]\n"
-	    "             [-l|--lines lines] [-G|--columns columns] [-h|--height height]\n"
+	    "             [-n|--instant] [-v|--version] [-pc|--print-config]\n"
+	    "             [-g|--generate-config [path]] [-l|--lines lines]\n"
+	    "             [-G|--columns columns] [-h|--height height]\n"
 	    "             [-p|--prompt prompt] [-fn|--font font] [-fs|--font-size size]\n"
 	    "             [-m|--monitor monitor]\n"
 	    "             [-nb|--normal-background color] [-nf|--normal-foreground color]\n"
@@ -1289,12 +1290,19 @@ main(int argc, char *argv[])
 	int i, fast = 0;
 	const char *fontsize = NULL;
 	const char *config_file = NULL;
-	int generate_config = 0;
+	int generate_config = 0;         /* 1 = write config, then exit */
+	int print_config = 0;            /* 1 = dump default config to stdout, then exit */
+	const char *generate_config_path = NULL; /* optional custom path for --generate-config */
 
 	/* 1. Scan for config-related options first */
 	for (i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "-g") || !strcmp(argv[i], "--generate-config")) {
 			generate_config = 1;
+			/* check if the next argument is a path (doesn't start with '-') */
+			if (i + 1 < argc && argv[i + 1][0] != '-')
+				generate_config_path = argv[++i];
+		} else if (!strcmp(argv[i], "-pc") || !strcmp(argv[i], "--print-config")) {
+			print_config = 1;
 		} else if (!strcmp(argv[i], "-cf") || !strcmp(argv[i], "--config")) {
 			if (i + 1 == argc)
 				usage();
@@ -1302,11 +1310,21 @@ main(int argc, char *argv[])
 		}
 	}
 
-	/* 2. Generate config or load configuration */
+	/* 2. Handle special exit-early flags */
+
+	/* --print-config: dump default config to stdout and exit */
+	if (print_config) {
+		fputs(default_config_content, stdout);
+		exit(0);
+	}
+
+	/* --generate-config [path]: write default config to path or XDG default */
 	if (generate_config) {
-		const char *path = get_default_config_path();
+		const char *path = generate_config_path
+			? generate_config_path
+			: get_default_config_path();
 		if (!path) {
-			fprintf(stderr, "error: could not resolve default config path\n");
+			fprintf(stderr, "error: could not resolve config path\n");
 			exit(1);
 		}
 		write_default_config(path);
@@ -1314,6 +1332,7 @@ main(int argc, char *argv[])
 		exit(0);
 	}
 
+	/* 3. Load configuration file */
 	if (config_file) {
 		struct stat st;
 		if (stat(config_file, &st) != 0) {
@@ -1326,7 +1345,9 @@ main(int argc, char *argv[])
 		if (path) {
 			struct stat st;
 			if (stat(path, &st) != 0) {
+				/* config not found — auto-generate and notify */
 				write_default_config(path);
+				fprintf(stderr, "info: config not found, generated default at: %s\n", path);
 			}
 			read_config(path);
 		}
@@ -1350,6 +1371,11 @@ main(int argc, char *argv[])
 		} else if (!strcmp(argv[i], "-n") || !strcmp(argv[i], "--instant")) {
 			instant = 1;
 		} else if (!strcmp(argv[i], "-g") || !strcmp(argv[i], "--generate-config")) {
+			/* already handled — also skip optional path argument if present */
+			if (i + 1 < argc && argv[i + 1][0] != '-')
+				i++;
+			continue;
+		} else if (!strcmp(argv[i], "-pc") || !strcmp(argv[i], "--print-config")) {
 			/* already handled */
 			continue;
 		} else {
