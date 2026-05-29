@@ -25,7 +25,7 @@
 #define TEXTW(X)              (drw_fontset_getwidth(drw, (X)) + lrpad)
 
 /* enums */
-enum { SchemeNorm, SchemeSel, SchemeOut, SchemeNormHighlight, SchemeSelHighlight, SchemeOutHighlight, SchemeLast }; /* color schemes */
+enum { SchemeNorm, SchemeSel, SchemeOut, SchemeNormHighlight, SchemeSelHighlight, SchemeOutHighlight, SchemeBorder, SchemeLast }; /* color schemes */
 
 struct item {
 	char *text;
@@ -195,45 +195,49 @@ drawmenu(void)
 {
 	unsigned int curpos;
 	struct item *item;
-	int x = 0, y = 0, fh = drw->fonts->h, w;
+	int x = border_width, y = border_width, fh = drw->fonts->h, w;
 
+	if (border_width) {
+		drw_setscheme(drw, scheme[SchemeBorder]);
+		drw_rect(drw, 0, 0, mw, mh, 1, 0);
+	}
 	drw_setscheme(drw, scheme[SchemeNorm]);
-	drw_rect(drw, 0, 0, mw, mh, 1, 1);
+	drw_rect(drw, border_width, border_width, mw - 2 * border_width, mh - 2 * border_width, 1, 1);
 
 	if (prompt && *prompt) {
 		drw_setscheme(drw, scheme[SchemeSel]);
-		x = drw_text(drw, x, 0, promptw, bh, lrpad / 2, prompt, 0);
+		x = drw_text(drw, x, border_width, promptw, bh, lrpad / 2, prompt, 0);
 	}
 	/* draw input field */
-	w = (lines > 0 || !matches) ? mw - x : inputw;
+	w = (lines > 0 || !matches) ? mw - x - border_width : inputw;
 	drw_setscheme(drw, scheme[SchemeNorm]);
-	drw_text(drw, x, 0, w, bh, lrpad / 2, text, 0);
+	drw_text(drw, x, border_width, w, bh, lrpad / 2, text, 0);
 
 	curpos = TEXTW(text) - TEXTW(&text[cursor]);
 	if ((curpos += lrpad / 2 - 1) < w) {
 		drw_setscheme(drw, scheme[SchemeNorm]);
-		drw_rect(drw, x + curpos, 2 + (bh - fh) / 2, 2, fh - 4, 1, 0);
+		drw_rect(drw, x + curpos, border_width + 2 + (bh - fh) / 2, 2, fh - 4, 1, 0);
 	}
 
 	if (lines > 0) {
 		/* draw vertical list */
 		for (item = curr; item != next; item = item->right)
-			drawitem(item, x, y += bh, mw - x);
+			drawitem(item, x, y += bh, mw - x - border_width);
 	} else if (matches) {
 		/* draw horizontal list */
 		x += inputw;
 		w = TEXTW("<");
 		if (curr->left) {
 			drw_setscheme(drw, scheme[SchemeNorm]);
-			drw_text(drw, x, 0, w, bh, lrpad / 2, "<", 0);
+			drw_text(drw, x, border_width, w, bh, lrpad / 2, "<", 0);
 		}
 		x += w;
 		for (item = curr; item != next; item = item->right)
-			x = drawitem(item, x, 0, textw_clamp(item->text, mw - x - TEXTW(">")));
+			x = drawitem(item, x, border_width, textw_clamp(item->text, mw - x - TEXTW(">") - border_width));
 		if (next) {
 			w = TEXTW(">");
 			drw_setscheme(drw, scheme[SchemeNorm]);
-			drw_text(drw, mw - w, 0, w, bh, lrpad / 2, ">", 0);
+			drw_text(drw, mw - w - border_width, border_width, w, bh, lrpad / 2, ">", 0);
 		}
 	}
 	drw_map(drw, win, 0, 0, mw, mh);
@@ -587,7 +591,7 @@ buttonpress(XEvent *e)
 {
 	struct item *item;
 	XButtonPressedEvent *ev = &e->xbutton;
-	int x = 0, y = 0, h = bh, w;
+	int x = border_width, y = border_width, h = bh, w;
 
 	if (ev->window != win)
 		return;
@@ -600,13 +604,13 @@ buttonpress(XEvent *e)
 		x += promptw;
 
 	/* input field */
-	w = (lines > 0 || !matches) ? mw - x : inputw;
+	w = (lines > 0 || !matches) ? mw - x - border_width : inputw;
 
 	/* left-click on input: clear input,
 	 * NOTE: if there is no left-arrow the space for < is reserved so
 	 *       add that to the input width */
 	if (ev->button == Button1 &&
-	   ((lines <= 0 && ev->x >= 0 && ev->x <= x + w +
+	   ((lines <= 0 && ev->x >= border_width && ev->x <= x + w +
 	   ((!prev || !curr->left) ? TEXTW("<") : 0)) ||
 	   (lines > 0 && ev->y >= y && ev->y <= y + h))) {
 		insert(NULL, -cursor);
@@ -640,7 +644,7 @@ buttonpress(XEvent *e)
 		return;
 	if (lines > 0) {
 		/* vertical list: (ctrl)left-click on item */
-		w = mw - x;
+		w = mw - x - border_width;
 		for (item = curr; item != next; item = item->right) {
 			y += h;
 			if (ev->y >= y && ev->y <= (y + h)) {
@@ -670,7 +674,7 @@ buttonpress(XEvent *e)
 		/* horizontal list: (ctrl)left-click on item */
 		for (item = curr; item != next; item = item->right) {
 			x += w;
-			w = textw_clamp(item->text, mw - x - TEXTW(">"));
+			w = textw_clamp(item->text, mw - x - TEXTW(">") - border_width);
 			if (ev->x >= x && ev->x <= x + w) {
 				puts(item->text);
 				if (!(ev->state & ControlMask))
@@ -685,7 +689,7 @@ buttonpress(XEvent *e)
 		}
 		/* left-click on right arrow */
 		w = TEXTW(">");
-		x = mw - w;
+		x = mw - w - border_width;
 		if (next && ev->x >= x && ev->x <= x + w) {
 			sel = curr = next;
 			calcoffsets();
@@ -807,7 +811,7 @@ setup(void)
 	bh = drw->fonts->h + 2;
 	bh = MAX(bh, lineheight);
 	lines = MAX(lines, 0);
-	mh = (lines + 1) * bh;
+	mh = (lines + 1) * bh + 2 * border_width;
 	promptw = (prompt && *prompt) ? TEXTW(prompt) - lrpad / 4 : 0;
 #ifdef XINERAMA
 	i = 0;
@@ -837,6 +841,7 @@ setup(void)
 
 		if (centered) {
 			mw = MIN(MAX(max_textw() + promptw, 100), info[i].width);
+			mw = MIN(mw + 2 * border_width, info[i].width);
 			x = info[i].x_org + ((info[i].width  - mw) / 2);
 			y = info[i].y_org + ((info[i].height - mh) / 2);
 		} else {
@@ -853,6 +858,7 @@ setup(void)
 			    parentwin);
 		if (centered) {
 			mw = MIN(MAX(max_textw() + promptw, 100), wa.width);
+			mw = MIN(mw + 2 * border_width, wa.width);
 			x = (wa.width  - mw) / 2;
 			y = (wa.height - mh) / 2;
 		} else {
@@ -899,7 +905,8 @@ static void
 usage(void)
 {
 	die("usage: dmenu [-bcfinv] [-l lines] [-h height] [-p prompt] [-fn font] [-m monitor]\n"
-	    "             [-nb color] [-nf color] [-sb color] [-sf color] [-w windowid]");
+	    "             [-nb color] [-nf color] [-sb color] [-sf color] [-w windowid]\n"
+	    "             [-bw borderwidth] [-bc bordercolor]");
 }
 
 int
@@ -920,10 +927,10 @@ main(int argc, char *argv[])
 		else if (!strcmp(argv[i], "-i")) { /* case-insensitive item matching */
 			fstrncmp = strncasecmp;
 			fstrstr = cistrstr;
-		} else if (!strcmp(argv[i], "-n")) /* instant select only match */
-			instant = 1;
-		else if (!strcmp(argv[i], "-c")) /* centers dmenu on screen */
+		} else if (!strcmp(argv[i], "-c")) /* centers dmenu on screen */
 			centered = 1;
+		else if (!strcmp(argv[i], "-n")) /* instant select only match */
+			instant = 1;
 		else if (i + 1 == argc)
 			usage();
 		/* these options take one argument */
@@ -951,6 +958,10 @@ main(int argc, char *argv[])
 			colors[SchemeOut][ColBg] = argv[++i];
 		else if (!strcmp(argv[i], "-of"))  /* outline foreground color */
 			colors[SchemeOut][ColFg] = argv[++i];
+		else if (!strcmp(argv[i], "-bw"))  /* border width */
+			border_width = atoi(argv[++i]);
+		else if (!strcmp(argv[i], "-bc"))  /* border color */
+			colors[SchemeBorder][ColFg] = argv[++i];
 		else if (!strcmp(argv[i], "-w"))   /* embedding window id */
 			embed = argv[++i];
 		else

@@ -28,6 +28,10 @@ dmenu \- dynamic menu
 .IR color ]
 .RB [ \-w
 .IR windowid ]
+.RB [ \-bw
+.IR borderwidth ]
+.RB [ \-bc
+.IR bordercolor ]
 .P
 .BR dmenu_run " ..."
 .SH DESCRIPTION
@@ -61,9 +65,6 @@ dmenu instantly selects if only one match.
 .TP
 .BI \-l " lines"
 dmenu lists items vertically, with the given number of lines.
-.TP
-.BI \-h " height"
-dmenu uses a menu line of at least 'height' pixels tall, but no less than 8.
 .TP
 .BI \-m " monitor"
 dmenu is displayed on the monitor number supplied. Monitor numbers are starting
@@ -101,6 +102,12 @@ prints version information to stdout, then exits.
 .TP
 .BI \-w " windowid"
 embed into windowid.
+.TP
+.BI \-bw " borderwidth"
+defines the width of the window border.
+.TP
+.BI \-bc " bordercolor"
+defines the window border color.
 .SH USAGE
 dmenu is completely controlled by the keyboard.  Items are selected using the
 arrow keys, page up, page down, home, and end.
