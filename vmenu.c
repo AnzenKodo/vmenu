@@ -75,8 +75,9 @@ static const char *colors[SchemeLast][2] = {
 	[SchemeOutHighlight] = { "#ffc978", "#00ffff" },
 	[SchemeBorder] = { "#cccccc", NULL },
 };
-/* -l option; if nonzero, vmenu uses vertical list with given number of lines */
+/* -l and -g options; controls number of lines and columns in grid if > 0 */
 static unsigned int lines      = 0;
+static unsigned int columns    = 1;
 /* Size of the window border */
 static unsigned int border_width = 0;
 /* -h option; minimum height of a menu line */
@@ -118,7 +119,7 @@ calcoffsets(void)
 	int i, n;
 
 	if (lines > 0)
-		n = lines * bh;
+		n = lines * columns * bh;
 	else
 		n = mw - (promptw + inputw + TEXTW("<") + TEXTW(">"));
 	/* calculate which items will begin the next page and previous page */
@@ -255,9 +256,15 @@ drawmenu(void)
 	}
 
 	if (lines > 0) {
-		/* draw vertical list */
-		for (item = curr; item != next; item = item->right)
-			drawitem(item, x, y += bh, mw - x - border_width);
+		/* draw grid */
+		int i = 0;
+		for (item = curr; item != next; item = item->right, i++)
+			drawitem(
+				item,
+				x + ((i / lines) * ((mw - x - border_width) / columns)),
+				y + (((i % lines) + 1) * bh),
+				(mw - x - border_width) / columns
+			);
 	} else if (matches) {
 		/* draw horizontal list */
 		x += inputw;
@@ -419,6 +426,8 @@ keypress(XKeyEvent *ev)
 {
 	char buf[64];
 	int len;
+	int i, offscreen = 0;
+	struct item *tmpsel;
 	KeySym ksym = NoSymbol;
 	Status status;
 
@@ -553,6 +562,27 @@ insert:
 		break;
 	case XK_Left:
 	case XK_KP_Left:
+		if (columns > 1) {
+			if (!sel)
+				return;
+			tmpsel = sel;
+			for (i = 0; i < lines; i++) {
+				if (!tmpsel->left || tmpsel->left->right != tmpsel) {
+					if (offscreen)
+						break;
+					return;
+				}
+				if (tmpsel == curr)
+					offscreen = 1;
+				tmpsel = tmpsel->left;
+			}
+			sel = tmpsel;
+			if (offscreen) {
+				curr = prev;
+				calcoffsets();
+			}
+			break;
+		}
 		if (cursor > 0 && (!sel || !sel->left || lines > 0)) {
 			cursor = nextrune(-1);
 			break;
@@ -593,6 +623,27 @@ insert:
 		break;
 	case XK_Right:
 	case XK_KP_Right:
+		if (columns > 1) {
+			if (!sel)
+				return;
+			tmpsel = sel;
+			for (i = 0; i < lines; i++) {
+				if (!tmpsel->right || tmpsel->right->left != tmpsel) {
+					if (offscreen)
+						break;
+					return;
+				}
+				tmpsel = tmpsel->right;
+				if (tmpsel == next)
+					offscreen = 1;
+			}
+			sel = tmpsel;
+			if (offscreen) {
+				curr = next;
+				calcoffsets();
+			}
+			break;
+		}
 		if (text[cursor] != '\0') {
 			cursor = nextrune(+1);
 			break;
@@ -978,6 +1029,7 @@ static const char default_config_content[] =
 	"\n"
 	"# Layout settings\n"
 	"lines = 0\n"
+	"columns = 1\n"
 	"line_height = 0\n"
 	"minimum_line_height = 8\n"
 	"\n"
@@ -1198,6 +1250,10 @@ static void read_config(const char *path) {
 				colors[SchemeBorder][ColFg] = strdup(parsed);
 		} else if (strcmp(key, "lines") == 0) {
 			lines = atoi(val);
+			if (columns == 0) columns = 1;
+		} else if (strcmp(key, "columns") == 0) {
+			columns = atoi(val);
+			if (columns == 0) columns = 1;
 		} else if (strcmp(key, "border_width") == 0) {
 			border_width = atoi(val);
 		} else if (strcmp(key, "line_height") == 0) {
@@ -1216,8 +1272,9 @@ usage(void)
 {
 	die("usage: vmenu [-b|--bottom] [-c|--centered] [-f|--fast] [-i|--case-insensitive]\n"
 	    "             [-n|--instant] [-v|--version] [-g|--generate-config]\n"
-	    "             [-l|--lines lines] [-h|--height height] [-p|--prompt prompt]\n"
-	    "             [-fn|--font font] [-fs|--font-size size] [-m|--monitor monitor]\n"
+	    "             [-l|--lines lines] [-G|--columns columns] [-h|--height height]\n"
+	    "             [-p|--prompt prompt] [-fn|--font font] [-fs|--font-size size]\n"
+	    "             [-m|--monitor monitor]\n"
 	    "             [-nb|--normal-background color] [-nf|--normal-foreground color]\n"
 	    "             [-sb|--selected-background color] [-sf|--selected-foreground color]\n"
 	    "             [-ob|--outline-background color] [-of|--outline-foreground color]\n"
@@ -1301,8 +1358,13 @@ main(int argc, char *argv[])
 				usage();
 			if (!strcmp(argv[i], "-cf") || !strcmp(argv[i], "--config")) {
 				i++; /* already handled, just skip argument */
+			} else if (!strcmp(argv[i], "-G") || !strcmp(argv[i], "--columns")) {
+				columns = atoi(argv[++i]);
+				if (columns == 0) columns = 1;
+				if (lines == 0) lines = 1;
 			} else if (!strcmp(argv[i], "-l") || !strcmp(argv[i], "--lines")) {
 				lines = atoi(argv[++i]);
+				if (columns == 0) columns = 1;
 			} else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--height")) {
 				lineheight = atoi(argv[++i]);
 				lineheight = MAX(lineheight, min_lineheight);
