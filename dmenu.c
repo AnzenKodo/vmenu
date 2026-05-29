@@ -911,7 +911,7 @@ setup(void)
 #endif
 
 static const char default_config_content[] =
-	"# dmenu configuration file (config.init)\n"
+	"# dmenu configuration file (config.conf)\n"
 	"# This file is read at runtime. Command line arguments override these settings.\n"
 	"\n"
 	"# Appearance\n"
@@ -922,34 +922,34 @@ static const char default_config_content[] =
 	"prompt = \"\"\n"
 	"\n"
 	"# Normal colors\n"
-	"norm_bg = \"#222222\"\n"
-	"norm_fg = \"#bbbbbb\"\n"
+	"normal_background = \"#222222\"\n"
+	"normal_foreground = \"#bbbbbb\"\n"
 	"\n"
 	"# Selected colors\n"
-	"sel_bg = \"#005577\"\n"
-	"sel_fg = \"#eeeeee\"\n"
+	"selected_background = \"#005577\"\n"
+	"selected_foreground = \"#eeeeee\"\n"
 	"\n"
 	"# Outline colors\n"
-	"out_bg = \"#00ffff\"\n"
-	"out_fg = \"#000000\"\n"
+	"outline_background = \"#00ffff\"\n"
+	"outline_foreground = \"#000000\"\n"
 	"\n"
 	"# Highlight colors\n"
-	"norm_hl_bg = \"#222222\"\n"
-	"norm_hl_fg = \"#ffc978\"\n"
-	"sel_hl_bg = \"#005577\"\n"
-	"sel_hl_fg = \"#ffc978\"\n"
-	"out_hl_bg = \"#00ffff\"\n"
-	"out_hl_fg = \"#ffc978\"\n"
+	"normal_highlight_background = \"#222222\"\n"
+	"normal_highlight_foreground = \"#ffc978\"\n"
+	"selected_highlight_background = \"#005577\"\n"
+	"selected_highlight_foreground = \"#ffc978\"\n"
+	"outline_highlight_background = \"#00ffff\"\n"
+	"outline_highlight_foreground = \"#ffc978\"\n"
 	"\n"
 	"# Border settings\n"
-	"border_bg = \"\"\n"
-	"border_fg = \"#cccccc\"\n"
+	"border_background = \"\"\n"
+	"border_foreground = \"#cccccc\"\n"
 	"border_width = 0\n"
 	"\n"
 	"# Layout settings\n"
 	"lines = 0\n"
-	"lineheight = 0\n"
-	"min_lineheight = 8\n"
+	"line_height = 0\n"
+	"minimum_line_height = 8\n"
 	"\n"
 	"# Behavior\n"
 	"worddelimiters = \" \"\n";
@@ -972,7 +972,7 @@ static const char *get_default_config_path(void) {
 	const char *home = get_home_dir();
 
 	if (xdg_config_home && xdg_config_home[0] != '\0') {
-		snprintf(config_path_buf, sizeof(config_path_buf), "%s/dmenu/config.init", xdg_config_home);
+		snprintf(config_path_buf, sizeof(config_path_buf), "%s/dmenu/config.conf", xdg_config_home);
 		struct stat st;
 		if (stat(config_path_buf, &st) == 0) {
 			return config_path_buf;
@@ -981,7 +981,7 @@ static const char *get_default_config_path(void) {
 
 	if (home && home[0] != '\0') {
 		static char fallback_buf[PATH_MAX];
-		snprintf(fallback_buf, sizeof(fallback_buf), "%s/.config/dmenu/config.init", home);
+		snprintf(fallback_buf, sizeof(fallback_buf), "%s/.config/dmenu/config.conf", home);
 		struct stat st;
 		if (stat(fallback_buf, &st) == 0) {
 			return fallback_buf;
@@ -989,12 +989,12 @@ static const char *get_default_config_path(void) {
 	}
 
 	if (xdg_config_home && xdg_config_home[0] != '\0') {
-		snprintf(config_path_buf, sizeof(config_path_buf), "%s/dmenu/config.init", xdg_config_home);
+		snprintf(config_path_buf, sizeof(config_path_buf), "%s/dmenu/config.conf", xdg_config_home);
 		return config_path_buf;
 	}
 
 	if (home && home[0] != '\0') {
-		snprintf(config_path_buf, sizeof(config_path_buf), "%s/.config/dmenu/config.init", home);
+		snprintf(config_path_buf, sizeof(config_path_buf), "%s/.config/dmenu/config.conf", home);
 		return config_path_buf;
 	}
 
@@ -1111,58 +1111,58 @@ static void read_config(const char *path) {
 				fonts[0] = strdup(parsed);
 		} else if (strcmp(key, "prompt") == 0) {
 			prompt = strdup(parse_string(val));
-		} else if (strcmp(key, "norm_bg") == 0) {
+		} else if (strcmp(key, "normal_background") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
 				colors[SchemeNorm][ColBg] = strdup(parsed);
-		} else if (strcmp(key, "norm_fg") == 0) {
+		} else if (strcmp(key, "normal_foreground") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
 				colors[SchemeNorm][ColFg] = strdup(parsed);
-		} else if (strcmp(key, "sel_bg") == 0) {
+		} else if (strcmp(key, "selected_background") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
 				colors[SchemeSel][ColBg] = strdup(parsed);
-		} else if (strcmp(key, "sel_fg") == 0) {
+		} else if (strcmp(key, "selected_foreground") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
 				colors[SchemeSel][ColFg] = strdup(parsed);
-		} else if (strcmp(key, "out_bg") == 0) {
+		} else if (strcmp(key, "outline_background") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
 				colors[SchemeOut][ColBg] = strdup(parsed);
-		} else if (strcmp(key, "out_fg") == 0) {
+		} else if (strcmp(key, "outline_foreground") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
 				colors[SchemeOut][ColFg] = strdup(parsed);
-		} else if (strcmp(key, "norm_hl_bg") == 0) {
+		} else if (strcmp(key, "normal_highlight_background") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
 				colors[SchemeNormHighlight][ColBg] = strdup(parsed);
-		} else if (strcmp(key, "norm_hl_fg") == 0) {
+		} else if (strcmp(key, "normal_highlight_foreground") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
 				colors[SchemeNormHighlight][ColFg] = strdup(parsed);
-		} else if (strcmp(key, "sel_hl_bg") == 0) {
+		} else if (strcmp(key, "selected_highlight_background") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
 				colors[SchemeSelHighlight][ColBg] = strdup(parsed);
-		} else if (strcmp(key, "sel_hl_fg") == 0) {
+		} else if (strcmp(key, "selected_highlight_foreground") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
 				colors[SchemeSelHighlight][ColFg] = strdup(parsed);
-		} else if (strcmp(key, "out_hl_bg") == 0) {
+		} else if (strcmp(key, "outline_highlight_background") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
 				colors[SchemeOutHighlight][ColBg] = strdup(parsed);
-		} else if (strcmp(key, "out_hl_fg") == 0) {
+		} else if (strcmp(key, "outline_highlight_foreground") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
 				colors[SchemeOutHighlight][ColFg] = strdup(parsed);
-		} else if (strcmp(key, "border_bg") == 0) {
+		} else if (strcmp(key, "border_background") == 0) {
 			char *parsed = parse_string(val);
 			colors[SchemeBorder][ColBg] = (parsed[0] != '\0') ? strdup(parsed) : NULL;
-		} else if (strcmp(key, "border_fg") == 0) {
+		} else if (strcmp(key, "border_foreground") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
 				colors[SchemeBorder][ColFg] = strdup(parsed);
@@ -1170,9 +1170,9 @@ static void read_config(const char *path) {
 			lines = atoi(val);
 		} else if (strcmp(key, "border_width") == 0) {
 			border_width = atoi(val);
-		} else if (strcmp(key, "lineheight") == 0) {
+		} else if (strcmp(key, "line_height") == 0) {
 			lineheight = atoi(val);
-		} else if (strcmp(key, "min_lineheight") == 0) {
+		} else if (strcmp(key, "minimum_line_height") == 0) {
 			min_lineheight = atoi(val);
 		} else if (strcmp(key, "worddelimiters") == 0) {
 			worddelimiters = strdup(parse_string(val));
