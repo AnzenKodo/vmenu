@@ -904,9 +904,9 @@ setup(void)
 static void
 usage(void)
 {
-	die("usage: dmenu [-bcfinv] [-l lines] [-h height] [-p prompt] [-fn font] [-m monitor]\n"
-	    "             [-nb color] [-nf color] [-sb color] [-sf color] [-w windowid]\n"
-	    "             [-bw borderwidth] [-bc bordercolor]");
+	die("usage: dmenu [-bcfinv] [-l lines] [-h height] [-p prompt] [-fn font] [-fs size]\n"
+	    "             [-m monitor] [-nb color] [-nf color] [-sb color] [-sf color]\n"
+	    "             [-w windowid] [-bw borderwidth] [-bc bordercolor]");
 }
 
 int
@@ -914,6 +914,7 @@ main(int argc, char *argv[])
 {
 	XWindowAttributes wa;
 	int i, fast = 0;
+	const char *fontsize = NULL;
 
 	for (i = 1; i < argc; i++)
 		/* these options take no arguments */
@@ -946,6 +947,8 @@ main(int argc, char *argv[])
 			prompt = argv[++i];
 		else if (!strcmp(argv[i], "-fn"))  /* font or font set */
 			fonts[0] = argv[++i];
+		else if (!strcmp(argv[i], "-fs"))  /* font size */
+			fontsize = argv[++i];
 		else if (!strcmp(argv[i], "-nb"))  /* normal background color */
 			colors[SchemeNorm][ColBg] = argv[++i];
 		else if (!strcmp(argv[i], "-nf"))  /* normal foreground color */
@@ -978,6 +981,26 @@ main(int argc, char *argv[])
 	if (!XGetWindowAttributes(dpy, parentwin, &wa))
 		die("could not get embedding window attributes: 0x%lx",
 		    parentwin);
+	if (fontsize) {
+		static char fontbuf[256];
+		const char *fn = fonts[0];
+		char *sizeptr = strstr(fn, ":size=");
+		if (sizeptr) {
+			size_t len = sizeptr - fn;
+			if (len >= sizeof(fontbuf))
+				len = sizeof(fontbuf) - 1;
+			strncpy(fontbuf, fn, len);
+			fontbuf[len] = '\0';
+			char *endptr = sizeptr + 6;
+			while (*endptr && (isdigit((unsigned char)*endptr) || *endptr == '.')) {
+				endptr++;
+			}
+			snprintf(fontbuf + len, sizeof(fontbuf) - len, ":size=%s%s", fontsize, endptr);
+		} else {
+			snprintf(fontbuf, sizeof(fontbuf), "%s:size=%s", fn, fontsize);
+		}
+		fonts[0] = fontbuf;
+	}
 	drw = drw_create(dpy, screen, root, wa.width, wa.height);
 	if (!drw_fontset_create(drw, fonts, LENGTH(fonts)))
 		die("no fonts could be loaded.");
