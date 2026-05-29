@@ -7,6 +7,11 @@
 #include <strings.h>
 #include <time.h>
 #include <unistd.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <limits.h>
+#include <pwd.h>
+#include <errno.h>
 
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
@@ -901,12 +906,293 @@ setup(void)
 	drawmenu();
 }
 
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
+
+static const char default_config_content[] =
+	"# dmenu configuration file (config.init)\n"
+	"# This file is read at runtime. Command line arguments override these settings.\n"
+	"\n"
+	"# Appearance\n"
+	"instant = 0\n"
+	"centered = 0\n"
+	"topbar = 1\n"
+	"font = \"monospace:size=10\"\n"
+	"prompt = \"\"\n"
+	"\n"
+	"# Normal colors\n"
+	"norm_bg = \"#222222\"\n"
+	"norm_fg = \"#bbbbbb\"\n"
+	"\n"
+	"# Selected colors\n"
+	"sel_bg = \"#005577\"\n"
+	"sel_fg = \"#eeeeee\"\n"
+	"\n"
+	"# Outline colors\n"
+	"out_bg = \"#00ffff\"\n"
+	"out_fg = \"#000000\"\n"
+	"\n"
+	"# Highlight colors\n"
+	"norm_hl_bg = \"#222222\"\n"
+	"norm_hl_fg = \"#ffc978\"\n"
+	"sel_hl_bg = \"#005577\"\n"
+	"sel_hl_fg = \"#ffc978\"\n"
+	"out_hl_bg = \"#00ffff\"\n"
+	"out_hl_fg = \"#ffc978\"\n"
+	"\n"
+	"# Border settings\n"
+	"border_bg = \"\"\n"
+	"border_fg = \"#cccccc\"\n"
+	"border_width = 0\n"
+	"\n"
+	"# Layout settings\n"
+	"lines = 0\n"
+	"lineheight = 0\n"
+	"min_lineheight = 8\n"
+	"\n"
+	"# Behavior\n"
+	"worddelimiters = \" \"\n";
+
+static const char *get_home_dir(void) {
+	const char *home = getenv("HOME");
+	if (!home) {
+		struct passwd *pw = getpwuid(getuid());
+		if (pw) {
+			home = pw->pw_dir;
+		}
+	}
+	return home;
+}
+
+static char config_path_buf[PATH_MAX];
+
+static const char *get_default_config_path(void) {
+	const char *xdg_config_home = getenv("XDG_CONFIG_HOME");
+	const char *home = get_home_dir();
+
+	if (xdg_config_home && xdg_config_home[0] != '\0') {
+		snprintf(config_path_buf, sizeof(config_path_buf), "%s/dmenu/config.init", xdg_config_home);
+		struct stat st;
+		if (stat(config_path_buf, &st) == 0) {
+			return config_path_buf;
+		}
+	}
+
+	if (home && home[0] != '\0') {
+		static char fallback_buf[PATH_MAX];
+		snprintf(fallback_buf, sizeof(fallback_buf), "%s/.config/dmenu/config.init", home);
+		struct stat st;
+		if (stat(fallback_buf, &st) == 0) {
+			return fallback_buf;
+		}
+	}
+
+	if (xdg_config_home && xdg_config_home[0] != '\0') {
+		snprintf(config_path_buf, sizeof(config_path_buf), "%s/dmenu/config.init", xdg_config_home);
+		return config_path_buf;
+	}
+
+	if (home && home[0] != '\0') {
+		snprintf(config_path_buf, sizeof(config_path_buf), "%s/.config/dmenu/config.init", home);
+		return config_path_buf;
+	}
+
+	return NULL;
+}
+
+static int create_parent_dirs(const char *path) {
+	char temp[PATH_MAX];
+	char *p = NULL;
+	size_t len;
+
+	snprintf(temp, sizeof(temp), "%s", path);
+	len = strlen(temp);
+	if (len == 0)
+		return -1;
+
+	for (p = temp + len - 1; p > temp; p--) {
+		if (*p == '/') {
+			*p = '\0';
+			break;
+		}
+	}
+
+	for (p = temp + 1; *p; p++) {
+		if (*p == '/') {
+			*p = '\0';
+			if (mkdir(temp, 0755) != 0 && errno != EEXIST) {
+				return -1;
+			}
+			*p = '/';
+		}
+	}
+	if (mkdir(temp, 0755) != 0 && errno != EEXIST) {
+		return -1;
+	}
+	return 0;
+}
+
+static void write_default_config(const char *path) {
+	if (create_parent_dirs(path) != 0) {
+		fprintf(stderr, "warning: could not create parent directories for %s\n", path);
+	}
+	FILE *fp = fopen(path, "w");
+	if (fp) {
+		fputs(default_config_content, fp);
+		fclose(fp);
+	} else {
+		fprintf(stderr, "warning: could not write default config to %s\n", path);
+	}
+}
+
+static char *trim(char *str) {
+	char *end;
+	while (isspace((unsigned char)*str)) str++;
+	if (*str == 0) return str;
+	end = str + strlen(str) - 1;
+	while (end > str && isspace((unsigned char)*end)) end--;
+	end[1] = '\0';
+	return str;
+}
+
+static char *parse_string(char *val) {
+	char *end = val + strlen(val) - 1;
+	while (end > val && isspace((unsigned char)*end)) {
+		*end = '\0';
+		end--;
+	}
+	if ((*val == '"' && *end == '"') || (*val == '\'' && *end == '\'')) {
+		*end = '\0';
+		return val + 1;
+	}
+	return val;
+}
+
+static void read_config(const char *path) {
+	FILE *fp = fopen(path, "r");
+	if (!fp)
+		return;
+
+	char line[1024];
+	while (fgets(line, sizeof(line), fp)) {
+		char *p = line;
+		while (isspace((unsigned char)*p))
+			p++;
+		if (*p == '#' || *p == '\0')
+			continue;
+
+		char *eq = strchr(p, '=');
+		if (!eq)
+			continue;
+
+		*eq = '\0';
+		char *key = trim(p);
+		char *val = eq + 1;
+
+		while (isspace((unsigned char)*val))
+			val++;
+
+		char *val_end = val + strlen(val) - 1;
+		while (val_end >= val && (*val_end == '\r' || *val_end == '\n')) {
+			*val_end = '\0';
+			val_end--;
+		}
+
+		if (strcmp(key, "instant") == 0) {
+			instant = atoi(val);
+		} else if (strcmp(key, "centered") == 0) {
+			centered = atoi(val);
+		} else if (strcmp(key, "topbar") == 0) {
+			topbar = atoi(val);
+		} else if (strcmp(key, "font") == 0) {
+			char *parsed = parse_string(val);
+			if (parsed[0] != '\0')
+				fonts[0] = strdup(parsed);
+		} else if (strcmp(key, "prompt") == 0) {
+			prompt = strdup(parse_string(val));
+		} else if (strcmp(key, "norm_bg") == 0) {
+			char *parsed = parse_string(val);
+			if (parsed[0] != '\0')
+				colors[SchemeNorm][ColBg] = strdup(parsed);
+		} else if (strcmp(key, "norm_fg") == 0) {
+			char *parsed = parse_string(val);
+			if (parsed[0] != '\0')
+				colors[SchemeNorm][ColFg] = strdup(parsed);
+		} else if (strcmp(key, "sel_bg") == 0) {
+			char *parsed = parse_string(val);
+			if (parsed[0] != '\0')
+				colors[SchemeSel][ColBg] = strdup(parsed);
+		} else if (strcmp(key, "sel_fg") == 0) {
+			char *parsed = parse_string(val);
+			if (parsed[0] != '\0')
+				colors[SchemeSel][ColFg] = strdup(parsed);
+		} else if (strcmp(key, "out_bg") == 0) {
+			char *parsed = parse_string(val);
+			if (parsed[0] != '\0')
+				colors[SchemeOut][ColBg] = strdup(parsed);
+		} else if (strcmp(key, "out_fg") == 0) {
+			char *parsed = parse_string(val);
+			if (parsed[0] != '\0')
+				colors[SchemeOut][ColFg] = strdup(parsed);
+		} else if (strcmp(key, "norm_hl_bg") == 0) {
+			char *parsed = parse_string(val);
+			if (parsed[0] != '\0')
+				colors[SchemeNormHighlight][ColBg] = strdup(parsed);
+		} else if (strcmp(key, "norm_hl_fg") == 0) {
+			char *parsed = parse_string(val);
+			if (parsed[0] != '\0')
+				colors[SchemeNormHighlight][ColFg] = strdup(parsed);
+		} else if (strcmp(key, "sel_hl_bg") == 0) {
+			char *parsed = parse_string(val);
+			if (parsed[0] != '\0')
+				colors[SchemeSelHighlight][ColBg] = strdup(parsed);
+		} else if (strcmp(key, "sel_hl_fg") == 0) {
+			char *parsed = parse_string(val);
+			if (parsed[0] != '\0')
+				colors[SchemeSelHighlight][ColFg] = strdup(parsed);
+		} else if (strcmp(key, "out_hl_bg") == 0) {
+			char *parsed = parse_string(val);
+			if (parsed[0] != '\0')
+				colors[SchemeOutHighlight][ColBg] = strdup(parsed);
+		} else if (strcmp(key, "out_hl_fg") == 0) {
+			char *parsed = parse_string(val);
+			if (parsed[0] != '\0')
+				colors[SchemeOutHighlight][ColFg] = strdup(parsed);
+		} else if (strcmp(key, "border_bg") == 0) {
+			char *parsed = parse_string(val);
+			colors[SchemeBorder][ColBg] = (parsed[0] != '\0') ? strdup(parsed) : NULL;
+		} else if (strcmp(key, "border_fg") == 0) {
+			char *parsed = parse_string(val);
+			if (parsed[0] != '\0')
+				colors[SchemeBorder][ColFg] = strdup(parsed);
+		} else if (strcmp(key, "lines") == 0) {
+			lines = atoi(val);
+		} else if (strcmp(key, "border_width") == 0) {
+			border_width = atoi(val);
+		} else if (strcmp(key, "lineheight") == 0) {
+			lineheight = atoi(val);
+		} else if (strcmp(key, "min_lineheight") == 0) {
+			min_lineheight = atoi(val);
+		} else if (strcmp(key, "worddelimiters") == 0) {
+			worddelimiters = strdup(parse_string(val));
+		}
+	}
+	fclose(fp);
+}
+
 static void
 usage(void)
 {
-	die("usage: dmenu [-bcfinv] [-l lines] [-h height] [-p prompt] [-fn font] [-fs size]\n"
-	    "             [-m monitor] [-nb color] [-nf color] [-sb color] [-sf color]\n"
-	    "             [-w windowid] [-bw borderwidth] [-bc bordercolor]");
+	die("usage: dmenu [-b|--bottom] [-c|--centered] [-f|--fast] [-i|--case-insensitive]\n"
+	    "             [-n|--instant] [-v|--version] [-g|--generate-config]\n"
+	    "             [-l|--lines lines] [-h|--height height] [-p|--prompt prompt]\n"
+	    "             [-fn|--font font] [-fs|--font-size size] [-m|--monitor monitor]\n"
+	    "             [-nb|--normal-background color] [-nf|--normal-foreground color]\n"
+	    "             [-sb|--selected-background color] [-sf|--selected-foreground color]\n"
+	    "             [-ob|--outline-background color] [-of|--outline-foreground color]\n"
+	    "             [-bw|--border-width width] [-bc|--border-color color]\n"
+	    "             [-w|--window-id windowid] [-cf|--config configfile]");
 }
 
 int
@@ -915,60 +1201,112 @@ main(int argc, char *argv[])
 	XWindowAttributes wa;
 	int i, fast = 0;
 	const char *fontsize = NULL;
+	const char *config_file = NULL;
+	int generate_config = 0;
 
-	for (i = 1; i < argc; i++)
+	/* 1. Scan for config-related options first */
+	for (i = 1; i < argc; i++) {
+		if (!strcmp(argv[i], "-g") || !strcmp(argv[i], "--generate-config")) {
+			generate_config = 1;
+		} else if (!strcmp(argv[i], "-cf") || !strcmp(argv[i], "--config")) {
+			if (i + 1 == argc)
+				usage();
+			config_file = argv[++i];
+		}
+	}
+
+	/* 2. Generate config or load configuration */
+	if (generate_config) {
+		const char *path = get_default_config_path();
+		if (!path) {
+			fprintf(stderr, "error: could not resolve default config path\n");
+			exit(1);
+		}
+		write_default_config(path);
+		printf("Default config generated at: %s\n", path);
+		exit(0);
+	}
+
+	if (config_file) {
+		struct stat st;
+		if (stat(config_file, &st) != 0) {
+			fprintf(stderr, "error: specified config file does not exist: %s\n", config_file);
+			exit(1);
+		}
+		read_config(config_file);
+	} else {
+		const char *path = get_default_config_path();
+		if (path) {
+			struct stat st;
+			if (stat(path, &st) != 0) {
+				write_default_config(path);
+			}
+			read_config(path);
+		}
+	}
+
+	/* 3. Parse command line options to override configuration settings */
+	for (i = 1; i < argc; i++) {
 		/* these options take no arguments */
-		if (!strcmp(argv[i], "-v")) {      /* prints version information */
+		if (!strcmp(argv[i], "-v") || !strcmp(argv[i], "--version")) {
 			puts("dmenu-"VERSION);
 			exit(0);
-		} else if (!strcmp(argv[i], "-b")) /* appears at the bottom of the screen */
+		} else if (!strcmp(argv[i], "-b") || !strcmp(argv[i], "--bottom")) {
 			topbar = 0;
-		else if (!strcmp(argv[i], "-f"))   /* grabs keyboard before reading stdin */
+		} else if (!strcmp(argv[i], "-f") || !strcmp(argv[i], "--fast")) {
 			fast = 1;
-		else if (!strcmp(argv[i], "-i")) { /* case-insensitive item matching */
+		} else if (!strcmp(argv[i], "-i") || !strcmp(argv[i], "--case-insensitive")) {
 			fstrncmp = strncasecmp;
 			fstrstr = cistrstr;
-		} else if (!strcmp(argv[i], "-c")) /* centers dmenu on screen */
+		} else if (!strcmp(argv[i], "-c") || !strcmp(argv[i], "--centered")) {
 			centered = 1;
-		else if (!strcmp(argv[i], "-n")) /* instant select only match */
+		} else if (!strcmp(argv[i], "-n") || !strcmp(argv[i], "--instant")) {
 			instant = 1;
-		else if (i + 1 == argc)
-			usage();
-		/* these options take one argument */
-		else if (!strcmp(argv[i], "-l"))   /* number of lines in vertical list */
-			lines = atoi(argv[++i]);
-		else if (!strcmp(argv[i], "-h")) { /* minimum height of one menu line */
-			lineheight = atoi(argv[++i]);
-			lineheight = MAX(lineheight, min_lineheight);
+		} else if (!strcmp(argv[i], "-g") || !strcmp(argv[i], "--generate-config")) {
+			/* already handled */
+			continue;
+		} else {
+			/* these options take one argument */
+			if (i + 1 == argc)
+				usage();
+			if (!strcmp(argv[i], "-cf") || !strcmp(argv[i], "--config")) {
+				i++; /* already handled, just skip argument */
+			} else if (!strcmp(argv[i], "-l") || !strcmp(argv[i], "--lines")) {
+				lines = atoi(argv[++i]);
+			} else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--height")) {
+				lineheight = atoi(argv[++i]);
+				lineheight = MAX(lineheight, min_lineheight);
+			} else if (!strcmp(argv[i], "-m") || !strcmp(argv[i], "--monitor")) {
+				mon = atoi(argv[++i]);
+			} else if (!strcmp(argv[i], "-p") || !strcmp(argv[i], "--prompt")) {
+				prompt = argv[++i];
+			} else if (!strcmp(argv[i], "-fn") || !strcmp(argv[i], "--font")) {
+				fonts[0] = argv[++i];
+			} else if (!strcmp(argv[i], "-fs") || !strcmp(argv[i], "--font-size")) {
+				fontsize = argv[++i];
+			} else if (!strcmp(argv[i], "-nb") || !strcmp(argv[i], "--normal-background")) {
+				colors[SchemeNorm][ColBg] = argv[++i];
+			} else if (!strcmp(argv[i], "-nf") || !strcmp(argv[i], "--normal-foreground")) {
+				colors[SchemeNorm][ColFg] = argv[++i];
+			} else if (!strcmp(argv[i], "-sb") || !strcmp(argv[i], "--selected-background")) {
+				colors[SchemeSel][ColBg] = argv[++i];
+			} else if (!strcmp(argv[i], "-sf") || !strcmp(argv[i], "--selected-foreground")) {
+				colors[SchemeSel][ColFg] = argv[++i];
+			} else if (!strcmp(argv[i], "-ob") || !strcmp(argv[i], "--outline-background")) {
+				colors[SchemeOut][ColBg] = argv[++i];
+			} else if (!strcmp(argv[i], "-of") || !strcmp(argv[i], "--outline-foreground")) {
+				colors[SchemeOut][ColFg] = argv[++i];
+			} else if (!strcmp(argv[i], "-bw") || !strcmp(argv[i], "--border-width")) {
+				border_width = atoi(argv[++i]);
+			} else if (!strcmp(argv[i], "-bc") || !strcmp(argv[i], "--border-color")) {
+				colors[SchemeBorder][ColFg] = argv[++i];
+			} else if (!strcmp(argv[i], "-w") || !strcmp(argv[i], "--window-id")) {
+				embed = argv[++i];
+			} else {
+				usage();
+			}
 		}
-		else if (!strcmp(argv[i], "-m"))
-			mon = atoi(argv[++i]);
-		else if (!strcmp(argv[i], "-p"))   /* adds prompt to left of input field */
-			prompt = argv[++i];
-		else if (!strcmp(argv[i], "-fn"))  /* font or font set */
-			fonts[0] = argv[++i];
-		else if (!strcmp(argv[i], "-fs"))  /* font size */
-			fontsize = argv[++i];
-		else if (!strcmp(argv[i], "-nb"))  /* normal background color */
-			colors[SchemeNorm][ColBg] = argv[++i];
-		else if (!strcmp(argv[i], "-nf"))  /* normal foreground color */
-			colors[SchemeNorm][ColFg] = argv[++i];
-		else if (!strcmp(argv[i], "-sb"))  /* selected background color */
-			colors[SchemeSel][ColBg] = argv[++i];
-		else if (!strcmp(argv[i], "-sf"))  /* selected foreground color */
-			colors[SchemeSel][ColFg] = argv[++i];
-		else if (!strcmp(argv[i], "-ob"))  /* outline background color */
-			colors[SchemeOut][ColBg] = argv[++i];
-		else if (!strcmp(argv[i], "-of"))  /* outline foreground color */
-			colors[SchemeOut][ColFg] = argv[++i];
-		else if (!strcmp(argv[i], "-bw"))  /* border width */
-			border_width = atoi(argv[++i]);
-		else if (!strcmp(argv[i], "-bc"))  /* border color */
-			colors[SchemeBorder][ColFg] = argv[++i];
-		else if (!strcmp(argv[i], "-w"))   /* embedding window id */
-			embed = argv[++i];
-		else
-			usage();
+	}
 
 	if (!setlocale(LC_CTYPE, "") || !XSupportsLocale())
 		fputs("warning: no locale support\n", stderr);

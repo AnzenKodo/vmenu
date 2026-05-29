@@ -31,4 +31,6 @@ static unsigned int min_lineheight = 8;
  * Characters not considered part of a word while deleting words
  * for example: " /?\"&[]"
  */
-static const char worddelimiters[] = " ";
+static const char *worddelimiters = " ";
+
+
