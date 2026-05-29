@@ -1,4 +1,4 @@
-# dmenu version
+# vmenu version
 VERSION = 5.4
 
 # paths

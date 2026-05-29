@@ -58,8 +58,8 @@ static Drw *drw;
 static Clr *scheme[SchemeLast];
 
 static int instant = 0;                     /* -n  option; if 1, select single entry automatically */
-static int centered = 0;                    /* -c  option; if 1, dmenu appears in center of screen */
-static int topbar = 1;                      /* -b  option; if 0, dmenu appears at bottom     */
+static int centered = 0;                    /* -c  option; if 1, vmenu appears in center of screen */
+static int topbar = 1;                      /* -b  option; if 0, vmenu appears at bottom     */
 /* -fn option overrides fonts[0]; default X11 font or font set */
 static const char *fonts[] = {
 	"monospace:size=10"
@@ -75,7 +75,7 @@ static const char *colors[SchemeLast][2] = {
 	[SchemeOutHighlight] = { "#ffc978", "#00ffff" },
 	[SchemeBorder] = { "#cccccc", NULL },
 };
-/* -l option; if nonzero, dmenu uses vertical list with given number of lines */
+/* -l option; if nonzero, vmenu uses vertical list with given number of lines */
 static unsigned int lines      = 0;
 /* Size of the window border */
 static unsigned int border_width = 0;
@@ -829,7 +829,7 @@ setup(void)
 	XIM xim;
 	Window w, dw, *dws;
 	XWindowAttributes wa;
-	XClassHint ch = {"dmenu", "dmenu"};
+	XClassHint ch = {"vmenu", "vmenu"};
 #ifdef XINERAMA
 	XineramaScreenInfo *info;
 	Window pw;
@@ -941,7 +941,7 @@ setup(void)
 #endif
 
 static const char default_config_content[] =
-	"# dmenu configuration file (config.conf)\n"
+	"# vmenu configuration file (config.conf)\n"
 	"# This file is read at runtime. Command line arguments override these settings.\n"
 	"\n"
 	"# Appearance\n"
@@ -1002,7 +1002,7 @@ static const char *get_default_config_path(void) {
 	const char *home = get_home_dir();
 
 	if (xdg_config_home && xdg_config_home[0] != '\0') {
-		snprintf(config_path_buf, sizeof(config_path_buf), "%s/dmenu/config.conf", xdg_config_home);
+		snprintf(config_path_buf, sizeof(config_path_buf), "%s/vmenu/config.conf", xdg_config_home);
 		struct stat st;
 		if (stat(config_path_buf, &st) == 0) {
 			return config_path_buf;
@@ -1011,7 +1011,7 @@ static const char *get_default_config_path(void) {
 
 	if (home && home[0] != '\0') {
 		static char fallback_buf[PATH_MAX];
-		snprintf(fallback_buf, sizeof(fallback_buf), "%s/.config/dmenu/config.conf", home);
+		snprintf(fallback_buf, sizeof(fallback_buf), "%s/.config/vmenu/config.conf", home);
 		struct stat st;
 		if (stat(fallback_buf, &st) == 0) {
 			return fallback_buf;
@@ -1019,12 +1019,12 @@ static const char *get_default_config_path(void) {
 	}
 
 	if (xdg_config_home && xdg_config_home[0] != '\0') {
-		snprintf(config_path_buf, sizeof(config_path_buf), "%s/dmenu/config.conf", xdg_config_home);
+		snprintf(config_path_buf, sizeof(config_path_buf), "%s/vmenu/config.conf", xdg_config_home);
 		return config_path_buf;
 	}
 
 	if (home && home[0] != '\0') {
-		snprintf(config_path_buf, sizeof(config_path_buf), "%s/.config/dmenu/config.conf", home);
+		snprintf(config_path_buf, sizeof(config_path_buf), "%s/.config/vmenu/config.conf", home);
 		return config_path_buf;
 	}
 
@@ -1214,7 +1214,7 @@ static void read_config(const char *path) {
 static void
 usage(void)
 {
-	die("usage: dmenu [-b|--bottom] [-c|--centered] [-f|--fast] [-i|--case-insensitive]\n"
+	die("usage: vmenu [-b|--bottom] [-c|--centered] [-f|--fast] [-i|--case-insensitive]\n"
 	    "             [-n|--instant] [-v|--version] [-g|--generate-config]\n"
 	    "             [-l|--lines lines] [-h|--height height] [-p|--prompt prompt]\n"
 	    "             [-fn|--font font] [-fs|--font-size size] [-m|--monitor monitor]\n"
@@ -1279,7 +1279,7 @@ main(int argc, char *argv[])
 	for (i = 1; i < argc; i++) {
 		/* these options take no arguments */
 		if (!strcmp(argv[i], "-v") || !strcmp(argv[i], "--version")) {
-			puts("dmenu-"VERSION);
+			puts("vmenu-"VERSION);
 			exit(0);
 		} else if (!strcmp(argv[i], "-b") || !strcmp(argv[i], "--bottom")) {
 			topbar = 0;

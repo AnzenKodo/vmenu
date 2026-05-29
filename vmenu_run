@@ -1,0 +1,2 @@
+#!/bin/sh
+vmenu_path | vmenu "$@" | ${SHELL:-"/bin/sh"} &
