@@ -43,12 +43,7 @@ static const char *get_version(void)
     if (version_buf[0] != '\0') return version_buf;
     FILE *fp = fopen("VERSION", "r");
     if (!fp) {
-        time_t t = time(NULL);
-        struct tm *tm = localtime(&t);
-        if (tm)
-            snprintf(version_buf, sizeof(version_buf), "%04d.%02d", tm->tm_year + 1900, tm->tm_mon + 1);
-        else
-            strcpy(version_buf, "unknown-date");
+        strcpy(version_buf, "unknown");
         return version_buf;
     }
     if (fgets(version_buf, sizeof(version_buf), fp)) {
@@ -58,12 +53,7 @@ static const char *get_version(void)
             len--;
         }
     } else {
-        time_t t = time(NULL);
-        struct tm *tm = localtime(&t);
-        if (tm)
-            snprintf(version_buf, sizeof(version_buf), "%04d.%02d", tm->tm_year + 1900, tm->tm_mon + 1);
-        else
-            strcpy(version_buf, "unknown-date");
+        strcpy(version_buf, "unknown");
     }
     fclose(fp);
     return version_buf;
@@ -433,6 +423,7 @@ static void usage(const char *argv0)
         "  run              Run target (default type: dev)\n"
         "  build-run        Build and run target (default type: dev)\n"
         "  build-debugger   Build debugger target (type: debug)\n"
+        "  generate-version Generate version number from current date\n"
         "  set-version      Set version number (writes to VERSION file)\n"
         "  clean            Remove build artifacts\n"
         "  install          Install release build to PREFIX\n"
@@ -545,6 +536,26 @@ int main(int argc, char *argv[])
 
     if (strcmp(cmd, "dist") == 0) {
         do_dist();
+        return 0;
+    }
+
+    if (strcmp(cmd, "generate-version") == 0) {
+        time_t t = time(NULL);
+        struct tm *tm = localtime(&t);
+        char date_buf[64];
+        if (tm) {
+            snprintf(date_buf, sizeof(date_buf), "%04d.%02d", tm->tm_year + 1900, tm->tm_mon + 1);
+        } else {
+            strcpy(date_buf, "unknown-date");
+        }
+        FILE *fp = fopen("VERSION", "w");
+        if (!fp) {
+            fprintf(stderr, "error: could not write to VERSION file\n");
+            return 1;
+        }
+        fprintf(fp, "%s\n", date_buf);
+        fclose(fp);
+        printf("Version generated and saved: %s\n", date_buf);
         return 0;
     }
 
