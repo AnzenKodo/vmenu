@@ -1,3 +1,4 @@
 vmenu
 build
 *.o
+*.out

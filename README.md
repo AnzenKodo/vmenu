@@ -2,8 +2,6 @@
 
 `vmenu` is an efficient, fast, and feature-rich dynamic menu for X, built as a fork of the classic `dmenu` tool. It reads a list of newline-separated items from standard input, presents an interactive menu, and prints the user's selection to standard output.
 
----
-
 ## Features & Applied Patches
 
 This fork incorporates several popular patches and enhancements to improve user experience:
@@ -17,8 +15,6 @@ This fork incorporates several popular patches and enhancements to improve user 
 - **Line Height**: Custom height options for menu lines using `-h` / `--height`.
 - **Mouse Support**: Select and interact with menu items using mouse clicks.
 
----
-
 ## Dependencies
 
 To compile and run `vmenu`, you need X11 header files, Xinerama, Fontconfig, and Xft libraries.
@@ -29,31 +25,29 @@ sudo apt-get update
 sudo apt-get install -y build-essential libx11-dev libxinerama-dev libfontconfig1-dev libxft-dev
 ```
 
----
-
 ## How to Build
 
 We use a custom, self-recompiling C-based build script (`build.c`) to build the project.
 
 ### 1. Bootstrap the Build Tool
-First-time compilation creates the build tool inside the `build/` directory:
+First-time build the build system from build.c:
 ```bash
-mkdir -p build && cc -o build/build build.c
+cc build.c
 ```
 
 ### 2. Compile Targets
 Run the build tool specifying a target type (`dev`, `debug`, or `release`):
 - **Development Build** (with sanitizers):
   ```bash
-  ./build/build build dev
+  ./a.out build dev
   ```
 - **Debug Build** (without sanitizers, debug-friendly):
   ```bash
-  ./build/build build debug
+  ./a.out build debug
   ```
 - **Release Build** (fully optimized):
   ```bash
-  ./build/build build release
+  ./a.out build release
   ```
 
 ### 3. Running & Testing
@@ -78,8 +72,6 @@ Clean object files and built binaries safely while keeping the `build/build` exe
   sudo ./build/build uninstall
   ```
 
----
-
 ## How Configuration Works
 
 `vmenu` loads a dynamic configuration file rather than relying strictly on compile-time headers.
@@ -99,28 +91,9 @@ Clean object files and built binaries safely while keeping the `build/build` exe
   vmenu --config /path/to/config.conf
   ```
 
----
-
 ## Command Line Flags
 
 You can retrieve all available command-line flags by passing `--help` or `-h`.
-
-### Usage Syntax:
-```
-usage: vmenu [-b|--bottom] [-c|--centered] [-f|--fast] [-i|--case-insensitive]
-             [-n|--instant] [-v|--version] [-pc|--print-config]
-             [-g|--generate-config [path]] [-l|--lines lines]
-             [-G|--columns columns] [-h|--height height]
-             [-p|--prompt prompt] [-fn|--font font] [-fs|--font-size size]
-             [-m|--monitor monitor]
-             [-nb|--normal-background color] [-nf|--normal-foreground color]
-             [-sb|--selected-background color] [-sf|--selected-foreground color]
-             [-ob|--outline-background color] [-of|--outline-foreground color]
-             [-bw|--border-width width] [-bc|--border-color color]
-             [-w|--window-id windowid] [-cf|--config configfile]
-```
-
----
 
 ## Download Release Builds
 
