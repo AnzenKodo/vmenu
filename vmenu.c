@@ -124,10 +124,10 @@ calcoffsets(void)
 		n = mw - (promptw + inputw + TEXTW("<") + TEXTW(">"));
 	/* calculate which items will begin the next page and previous page */
 	for (i = 0, next = curr; next; next = next->right)
-		if ((i += (lines > 0) ? bh : textw_clamp(next->text, n)) > n)
+		if ((i += (lines > 0) ? bh : (int)textw_clamp(next->text, n)) > n)
 			break;
 	for (i = 0, prev = curr; prev && prev->left; prev = prev->left)
-		if ((i += (lines > 0) ? bh : textw_clamp(prev->left->text, n)) > n)
+		if ((i += (lines > 0) ? bh : (int)textw_clamp(prev->left->text, n)) > n)
 			break;
 }
 
@@ -136,7 +136,7 @@ max_textw(void)
 {
 	int len = 0;
 	for (struct item *item = items; item && item->text; item++)
-		len = MAX(TEXTW(item->text), len);
+		len = MAX((int)TEXTW(item->text), len);
 	return len;
 }
 
@@ -200,7 +200,7 @@ drawhighlights(struct item *item, int x, int y, int maxw)
 					drw,
 					x + indentx - (lrpad / 2) - 1,
 					y,
-					MIN(maxw - indentx, TEXTW(highlight) - lrpad),
+					MIN(maxw - indentx, (int)TEXTW(highlight) - lrpad),
 					bh, 0, highlight, 0
 				);
 			highlight[strlen(token)] = restorechar;
@@ -245,12 +245,11 @@ drawmenu(void)
 		x = drw_text(drw, x, border_width, promptw, bh, lrpad / 2, prompt, 0);
 	}
 	/* draw input field */
-	w = (lines > 0 || !matches) ? mw - x - border_width : inputw;
-	drw_setscheme(drw, scheme[SchemeNorm]);
+	w = (lines > 0 || !matches) ? (int)(mw - x - border_width) : inputw;
 	drw_text(drw, x, border_width, w, bh, lrpad / 2, text, 0);
 
 	curpos = TEXTW(text) - TEXTW(&text[cursor]);
-	if ((curpos += lrpad / 2 - 1) < w) {
+	if ((curpos += lrpad / 2 - 1) < (unsigned int)w) {
 		drw_setscheme(drw, scheme[SchemeNorm]);
 		drw_rect(drw, x + curpos, border_width + 2 + (bh - fh) / 2, 2, fh - 4, 1, 0);
 	}
@@ -566,7 +565,7 @@ insert:
 			if (!sel)
 				return;
 			tmpsel = sel;
-			for (i = 0; i < lines; i++) {
+			for (i = 0; i < (int)lines; i++) {
 				if (!tmpsel->left || tmpsel->left->right != tmpsel) {
 					if (offscreen)
 						break;
@@ -627,7 +626,7 @@ insert:
 			if (!sel)
 				return;
 			tmpsel = sel;
-			for (i = 0; i < lines; i++) {
+			for (i = 0; i < (int)lines; i++) {
 				if (!tmpsel->right || tmpsel->right->left != tmpsel) {
 					if (offscreen)
 						break;
@@ -690,14 +689,14 @@ buttonpress(XEvent *e)
 		x += promptw;
 
 	/* input field */
-	w = (lines > 0 || !matches) ? mw - x - border_width : inputw;
+	w = (lines > 0 || !matches) ? (int)(mw - x - border_width) : inputw;
 
 	/* left-click on input: clear input,
 	 * NOTE: if there is no left-arrow the space for < is reserved so
 	 *       add that to the input width */
 	if (ev->button == Button1 &&
-	   ((lines <= 0 && ev->x >= border_width && ev->x <= x + w +
-	   ((!prev || !curr->left) ? TEXTW("<") : 0)) ||
+	   ((lines <= 0 && ev->x >= (int)border_width && ev->x <= x + w +
+	   ((!prev || !curr->left) ? (int)TEXTW("<") : 0)) ||
 	   (lines > 0 && ev->y >= y && ev->y <= y + h))) {
 		insert(NULL, -cursor);
 		drawmenu();
@@ -895,8 +894,8 @@ setup(void)
 
 	/* calculate menu geometry */
 	bh = drw->fonts->h + 2;
-	bh = MAX(bh, lineheight);
-	lines = MAX(lines, 0);
+	bh = MAX(bh, (int)lineheight);
+	lines = MAX(lines, 0u);
 	mh = (lines + 1) * bh + 2 * border_width;
 	promptw = (prompt && *prompt) ? TEXTW(prompt) - lrpad / 4 : 0;
 #ifdef XINERAMA
@@ -927,7 +926,7 @@ setup(void)
 
 		if (centered) {
 			mw = MIN(MAX(max_textw() + promptw, 100), info[i].width);
-			mw = MIN(mw + 2 * border_width, info[i].width);
+			mw = MIN((int)(mw + 2 * border_width), (int)info[i].width);
 			x = info[i].x_org + ((info[i].width  - mw) / 2);
 			y = info[i].y_org + ((info[i].height - mh) / 2);
 		} else {
@@ -944,7 +943,7 @@ setup(void)
 			    parentwin);
 		if (centered) {
 			mw = MIN(MAX(max_textw() + promptw, 100), wa.width);
-			mw = MIN(mw + 2 * border_width, wa.width);
+			mw = MIN((int)(mw + 2 * border_width), wa.width);
 			x = (wa.width  - mw) / 2;
 			y = (wa.height - mh) / 2;
 		} else {
@@ -977,7 +976,7 @@ setup(void)
 		XReparentWindow(dpy, win, parentwin, x, y);
 		XSelectInput(dpy, parentwin, FocusChangeMask | SubstructureNotifyMask);
 		if (XQueryTree(dpy, parentwin, &dw, &w, &dws, &du) && dws) {
-			for (i = 0; i < du && dws[i] != win; ++i)
+			for (i = 0; i < (int)du && dws[i] != win; ++i)
 				XSelectInput(dpy, dws[i], FocusChangeMask);
 			XFree(dws);
 		}
