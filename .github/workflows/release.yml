@@ -1,0 +1,58 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - master
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Multi-arch and Dependencies
+        run: |
+          sudo dpkg --add-architecture arm64
+          sudo apt-get update
+          
+          # Install X11 and freetype dependencies for host (AMD64)
+          sudo apt-get install -y libx11-dev libxinerama-dev libfontconfig1-dev libxft-dev
+          
+          # Install cross-compiler and libraries for target (ARM64)
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          sudo apt-get install -y libx11-dev:arm64 libxinerama-dev:arm64 libfontconfig1-dev:arm64 libxft-dev:arm64
+
+      - name: Build Binaries
+        run: |
+          # Bootstrap host build system
+          mkdir -p build
+          gcc -o build/build build.c
+
+          # 1. Build AMD64 binary
+          ./build/build clean
+          ./build/build build release
+          mv build/vmenu build/vmenu-amd64
+
+          # 2. Build ARM64 binary
+          ./build/build clean
+          CC=aarch64-linux-gnu-gcc ./build/build build release
+          mv build/vmenu build/vmenu-arm64
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME="v5.4.${{ github.run_number }}"
+          gh release create "$TAG_NAME" \
+            --title "Release $TAG_NAME" \
+            --notes "Automated build of vmenu for AMD64 and ARM64" \
+            build/vmenu-amd64 \
+            build/vmenu-arm64

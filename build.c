@@ -1,18 +1,24 @@
 /* build.c - Build system for vmenu
  *
  * Bootstrap (first time only):
- *   cc -o build build.c && ./build
+ *   mkdir -p build && cc -o build/build build.c
  *
- * After that, ./build will recompile itself automatically when build.c changes.
+ * After that, ./build/build re-compiles itself when build.c changes.
  *
  * Commands:
- *   ./build              Build vmenu (default)
- *   ./build clean        Remove build artifacts
- *   ./build install      Install to PREFIX (default: /usr/local)
- *   ./build uninstall    Remove from PREFIX
- *   ./build dist         Create source tarball vmenu-VERSION.tar.gz
+ *   ./build/build                    Build dev build     → build/vmenu_dev
+ *   ./build/build dev                Build dev build     → build/vmenu_dev
+ *   ./build/build debug              Build debug build   → build/vmenu_debug
+ *   ./build/build release            Build release build → build/vmenu
+ *   ./build/build run [type]         Build and run specified target
+ *   ./build/build build-run [type]   Build and run specified target
+ *   ./build/build build-debugger     Build debug build
+ *   ./build/build clean              Remove build artifacts
+ *   ./build/build install            Install release build to PREFIX
+ *   ./build/build uninstall          Remove installed files
+ *   ./build/build dist               Create source tarball
  *
- * Environment overrides:
+ * Environment:
  *   DESTDIR, PREFIX, MANPREFIX
  */
 
@@ -27,10 +33,17 @@
 #include <errno.h>
 #include <time.h>
 
-/* ── User-facing configuration ──────────────────────────────────────────── */
+/* ── Configuration ──────────────────────────────────────────────────────── */
 
 #define VERSION     "5.4"
-#define CC          "cc"
+#define BUILD_DIR   "build"
+
+static const char *get_cc(void)
+{
+    const char *env_cc = getenv("CC");
+    return env_cc ? env_cc : "cc";
+}
+#define CC get_cc()
 
 #ifndef PREFIX
 #  define PREFIX     "/usr/local"
@@ -39,33 +52,82 @@
 #  define MANPREFIX  PREFIX "/share/man"
 #endif
 
-/* X11 */
 #define X11INC      "/usr/X11R6/include"
 #define X11LIB      "/usr/X11R6/lib"
-
-/* Freetype */
 #define FREETYPEINC "/usr/include/freetype2"
 
-/* Compiler flags (passed to every translation unit) */
-#define CFLAGS_STR \
-    "-std=c99 -pedantic -Wall -Os" \
+/* Common flags shared by all build types */
+#define CFLAGS_COMMON \
+    "-std=c99 -pedantic -Wall -Wextra" \
     " -I" X11INC " -I" FREETYPEINC \
     " -D_DEFAULT_SOURCE -D_BSD_SOURCE" \
     " -D_XOPEN_SOURCE=700 -D_POSIX_C_SOURCE=200809L" \
     " -DVERSION=\\\"" VERSION "\\\"" \
     " -DXINERAMA"
 
-/* Linker flags */
+/* Release: optimized, no debug symbols */
+#define CFLAGS_RELEASE  CFLAGS_COMMON " -O3"
+
+/* Dev: debug friendly, full debug info, sanitizers */
+#define CFLAGS_DEV \
+    CFLAGS_COMMON \
+    " -O0 -g3 -ggdb" \
+    " -DBUILD_DEBUG=1" \
+    " -fsanitize=address,undefined" \
+    " -fno-omit-frame-pointer"
+
+/* Debug: debug friendly, full debug info, NO sanitizers */
+#define CFLAGS_DEBUG \
+    CFLAGS_COMMON \
+    " -O0 -g3 -ggdb" \
+    " -DBUILD_DEBUG=1"
+
 #define LDFLAGS_STR \
     "-L" X11LIB " -lX11 -lXinerama -lfontconfig -lXft"
 
-/* Sources that compile into the vmenu binary */
-static const char *vmenu_srcs[] = { "vmenu.c", "drw.c", "util.c", NULL };
+/* Dev linker needs sanitizer runtime */
+#define LDFLAGS_DEV_STR \
+    LDFLAGS_STR " -fsanitize=address,undefined"
 
-/* Headers that, when changed, trigger a full rebuild */
-static const char *vmenu_headers[] = { "drw.h", "util.h", "arg.h", NULL };
+/* Source files */
+static const char *vmenu_srcs[]    = { "vmenu.c", "drw.c", "util.c", NULL };
+static const char *vmenu_headers[] = { "drw.h", "util.h", NULL };
 
-/* ── Utility helpers ────────────────────────────────────────────────────── */
+/* ── Build type ─────────────────────────────────────────────────────────── */
+
+typedef enum {
+    BUILD_DEV,
+    BUILD_DEBUG,
+    BUILD_RELEASE
+} Build_Type;
+
+static const char *build_type_name(Build_Type t)
+{
+    switch (t) {
+        case BUILD_DEV:     return "dev";
+        case BUILD_DEBUG:   return "debug";
+        case BUILD_RELEASE: return "release";
+    }
+    return "unknown";
+}
+
+/* Binary path for a given build type */
+static void bin_path(Build_Type t, char *out, size_t sz)
+{
+    switch (t) {
+        case BUILD_DEV:
+            snprintf(out, sz, BUILD_DIR "/vmenu_dev");
+            break;
+        case BUILD_DEBUG:
+            snprintf(out, sz, BUILD_DIR "/vmenu_debug");
+            break;
+        case BUILD_RELEASE:
+            snprintf(out, sz, BUILD_DIR "/vmenu");
+            break;
+    }
+}
+
+/* ── Utility ────────────────────────────────────────────────────────────── */
 
 static int file_exists(const char *p)
 {
@@ -79,10 +141,9 @@ static time_t file_mtime(const char *p)
     return stat(p, &st) == 0 ? st.st_mtime : 0;
 }
 
-/* Run a shell command, print it, return its exit code. */
 static int run(const char *fmt, ...)
 {
-    char cmd[4096];
+    char cmd[8192];
     va_list ap;
     va_start(ap, fmt);
     vsnprintf(cmd, sizeof cmd, fmt, ap);
@@ -92,10 +153,9 @@ static int run(const char *fmt, ...)
     return WIFEXITED(r) ? WEXITSTATUS(r) : 1;
 }
 
-/* Like run() but terminate the build on failure. */
 static void must(const char *fmt, ...)
 {
-    char cmd[4096];
+    char cmd[8192];
     va_list ap;
     va_start(ap, fmt);
     vsnprintf(cmd, sizeof cmd, fmt, ap);
@@ -104,7 +164,7 @@ static void must(const char *fmt, ...)
     int r = system(cmd);
     int code = WIFEXITED(r) ? WEXITSTATUS(r) : 1;
     if (code != 0) {
-        fprintf(stderr, "build error: command exited %d\n  %s\n", code, cmd);
+        fprintf(stderr, "build error (exit %d): %s\n", code, cmd);
         exit(1);
     }
 }
@@ -114,20 +174,24 @@ static void mkdirp(const char *path)
     must("mkdir -p '%s'", path);
 }
 
-/* Derive the .o name from a .c name (in-place, 256-byte buffer). */
-static void c_to_o(const char *src, char *out, size_t sz)
+/* Derive .o path inside BUILD_DIR from a .c filename and Build_Type. */
+static void obj_path(const char *src, Build_Type t, char *out, size_t sz)
 {
-    size_t len = strlen(src);
-    if (len >= sz) len = sz - 1;
-    memcpy(out, src, len);
-    out[len] = '\0';
-    if (len > 2 && out[len - 2] == '.' && out[len - 1] == 'c')
-        out[len - 1] = 'o';
+    /* e.g. "vmenu.c" and BUILD_DEV → "build/vmenu_dev.o" */
+    const char *base = strrchr(src, '/');
+    base = base ? base + 1 : src;
+    char tmp[256];
+    size_t len = strlen(base);
+    if (len >= sizeof tmp) len = sizeof tmp - 1;
+    memcpy(tmp, base, len);
+    tmp[len] = '\0';
+    if (len > 2 && tmp[len-2] == '.' && tmp[len-1] == 'c')
+        tmp[len-2] = '\0'; /* Strip ".c" */
+    snprintf(out, sz, BUILD_DIR "/%s_%s.o", tmp, build_type_name(t));
 }
 
 /* ── Self-rebuild ───────────────────────────────────────────────────────── */
 
-/* If build.c is newer than the running binary, recompile and re-exec. */
 static void self_rebuild(int argc, char *argv[])
 {
     const char *self = argv[0];
@@ -135,8 +199,8 @@ static void self_rebuild(int argc, char *argv[])
     if (file_mtime("build.c") <= file_mtime(self)) return;
 
     printf("build.c changed — rebuilding...\n");
-    if (run(CC " -o %s build.c", self) != 0) {
-        fprintf(stderr, "build error: failed to rebuild build binary\n");
+    if (run("cc -o %s build.c", self) != 0) {
+        fprintf(stderr, "build error: could not rebuild build binary\n");
         exit(1);
     }
     execv(self, argv);
@@ -144,74 +208,117 @@ static void self_rebuild(int argc, char *argv[])
     exit(1);
 }
 
-/* ── Compile one .c → .o, skip if up to date ────────────────────────────── */
+/* ── Compile one .c → build/.o, skip if up to date ─────────────────────── */
 
-/* Returns 1 if already up to date (no recompile needed). */
-static int compile_obj(const char *src)
+/* Returns 1 if already up to date. */
+static int compile_obj(const char *src, Build_Type t)
 {
-    char obj[256];
-    c_to_o(src, obj, sizeof obj);
+    char obj[512];
+    obj_path(src, t, obj, sizeof obj);
 
     int stale = !file_exists(obj) || file_mtime(src) > file_mtime(obj);
-    if (!stale) {
-        for (int h = 0; vmenu_headers[h] && !stale; h++)
-            if (file_exists(vmenu_headers[h]) &&
-                file_mtime(vmenu_headers[h]) > file_mtime(obj))
-                stale = 1;
-    }
+    for (int h = 0; !stale && vmenu_headers[h]; h++)
+        if (file_exists(vmenu_headers[h]) &&
+            file_mtime(vmenu_headers[h]) > file_mtime(obj))
+            stale = 1;
 
     if (!stale) {
         printf("  [up to date] %s\n", obj);
         return 1;
     }
-    must(CC " -c " CFLAGS_STR " -o %s %s", obj, src);
+
+    const char *cflags;
+    switch (t) {
+        case BUILD_DEV:     cflags = CFLAGS_DEV;     break;
+        case BUILD_DEBUG:   cflags = CFLAGS_DEBUG;   break;
+        case BUILD_RELEASE: cflags = CFLAGS_RELEASE; break;
+        default:            cflags = CFLAGS_DEV;     break;
+    }
+
+    must("%s -c %s -o %s %s", CC, cflags, obj, src);
     return 0;
 }
 
-/* ── Build targets ──────────────────────────────────────────────────────── */
+/* ── Build ──────────────────────────────────────────────────────────────── */
 
-static void build_vmenu(void)
+static void do_build(Build_Type t)
 {
-    printf("Building vmenu " VERSION "...\n");
+    char bin[512];
+    bin_path(t, bin, sizeof bin);
+
+    printf("Building vmenu " VERSION " [%s] → %s\n", build_type_name(t), bin);
+    mkdirp(BUILD_DIR);
 
     int any_rebuilt = 0;
     for (int i = 0; vmenu_srcs[i]; i++)
-        if (!compile_obj(vmenu_srcs[i]))
+        if (!compile_obj(vmenu_srcs[i], t))
             any_rebuilt = 1;
 
-    if (!any_rebuilt && file_exists("vmenu")) {
-        printf("  [up to date] vmenu\n");
+    if (!any_rebuilt && file_exists(bin)) {
+        printf("  [up to date] %s\n", bin);
         return;
     }
 
-    /* assemble the object list */
-    char objlist[1024] = "";
+    /* build object list */
+    char objlist[2048] = "";
     for (int i = 0; vmenu_srcs[i]; i++) {
-        char obj[256];
-        c_to_o(vmenu_srcs[i], obj, sizeof obj);
+        char obj[512];
+        obj_path(vmenu_srcs[i], t, obj, sizeof obj);
         if (i) strncat(objlist, " ", sizeof objlist - strlen(objlist) - 1);
         strncat(objlist, obj, sizeof objlist - strlen(objlist) - 1);
     }
 
-    must(CC " -o vmenu %s " LDFLAGS_STR, objlist);
-    printf("Done: ./vmenu\n");
+    const char *ldflags = (t == BUILD_DEV) ? LDFLAGS_DEV_STR : LDFLAGS_STR;
+    must("%s -o %s %s %s", CC, bin, objlist, ldflags);
+    printf("Done: %s\n", bin);
 }
+
+/* ── Run ────────────────────────────────────────────────────────────────── */
+
+static void do_run(Build_Type t, int argc, char *argv[], int arg_start)
+{
+    char bin[512];
+    bin_path(t, bin, sizeof bin);
+
+    if (!file_exists(bin)) {
+        fprintf(stderr, "error: %s not found — build it first\n", bin);
+        exit(1);
+    }
+
+    printf("Running [%s]: %s\n", build_type_name(t), bin);
+
+    /* Construct the command line with optional arguments */
+    char cmd[8192];
+    int len = snprintf(cmd, sizeof(cmd), "echo -e 'option 1\\noption 2\\noption 3' | %s", bin);
+    for (int i = arg_start; i < argc; i++) {
+        len += snprintf(cmd + len, sizeof(cmd) - len, " '%s'", argv[i]);
+    }
+
+    must("%s", cmd);
+}
+
+/* ── Clean ──────────────────────────────────────────────────────────────── */
 
 static void do_clean(void)
 {
-    printf("Cleaning...\n");
-    const char *rm[] = { "vmenu", "vmenu.o", "drw.o", "util.o", NULL };
-    for (int i = 0; rm[i]; i++)
-        if (file_exists(rm[i]))
-            must("rm -f '%s'", rm[i]);
+    printf("Cleaning build artifacts...\n");
+    run("rm -f " BUILD_DIR "/*.o");
+    run("rm -f " BUILD_DIR "/vmenu " BUILD_DIR "/vmenu_dev " BUILD_DIR "/vmenu_debug");
+    run("rm -f vmenu vmenu.o drw.o util.o dmenu.o stest.o a.out");
     run("rm -f vmenu-" VERSION ".tar.gz");
     printf("Clean.\n");
 }
 
+/* ── Install / Uninstall ────────────────────────────────────────────────── */
+
 static void do_install(void)
 {
-    if (!file_exists("vmenu")) {
-        fprintf(stderr, "error: vmenu is not built yet — run ./build first\n");
+    char bin[512];
+    bin_path(BUILD_RELEASE, bin, sizeof bin);
+
+    if (!file_exists(bin)) {
+        fprintf(stderr, "error: release build not found (%s)\n"
+                        "       run './build build release' first\n", bin);
         exit(1);
     }
 
@@ -220,14 +327,14 @@ static void do_install(void)
     const char *manpfx  = getenv("MANPREFIX") ? getenv("MANPREFIX") : MANPREFIX;
 
     char bindir[512], man1dir[512];
-    snprintf(bindir,   sizeof bindir,   "%s%s/bin",       destdir, pfx);
-    snprintf(man1dir,  sizeof man1dir,  "%s%s/man1",      destdir, manpfx);
+    snprintf(bindir,  sizeof bindir,  "%s%s/bin",  destdir, pfx);
+    snprintf(man1dir, sizeof man1dir, "%s%s/man1", destdir, manpfx);
 
     printf("Installing binaries → %s\n", bindir);
     mkdirp(bindir);
-    must("cp -f vmenu       '%s/vmenu'",       bindir);
-    must("cp -f vmenu_path  '%s/vmenu_path'",  bindir);
-    must("cp -f vmenu_run   '%s/vmenu_run'",   bindir);
+    must("cp -f '%s'       '%s/vmenu'",      bin,    bindir);
+    must("cp -f vmenu_path '%s/vmenu_path'", bindir);
+    must("cp -f vmenu_run  '%s/vmenu_run'",  bindir);
     must("chmod 755 '%s/vmenu' '%s/vmenu_path' '%s/vmenu_run'",
          bindir, bindir, bindir);
 
@@ -246,15 +353,17 @@ static void do_uninstall(void)
     const char *manpfx  = getenv("MANPREFIX") ? getenv("MANPREFIX") : MANPREFIX;
 
     char bindir[512], man1dir[512];
-    snprintf(bindir,   sizeof bindir,   "%s%s/bin",   destdir, pfx);
-    snprintf(man1dir,  sizeof man1dir,  "%s%s/man1",  destdir, manpfx);
+    snprintf(bindir,  sizeof bindir,  "%s%s/bin",  destdir, pfx);
+    snprintf(man1dir, sizeof man1dir, "%s%s/man1", destdir, manpfx);
 
     printf("Uninstalling...\n");
     run("rm -f '%s/vmenu' '%s/vmenu_path' '%s/vmenu_run'",
-        bindir, bindir, bindir);
+         bindir, bindir, bindir);
     run("rm -f '%s/vmenu.1'", man1dir);
     printf("Uninstalled.\n");
 }
+
+/* ── Dist ───────────────────────────────────────────────────────────────── */
 
 static void do_dist(void)
 {
@@ -266,12 +375,8 @@ static void do_dist(void)
     mkdirp(dir);
 
     const char *files[] = {
-        "LICENSE", "README", "build.c",
-        "arg.h", "drw.h", "drw.c",
-        "util.h", "util.c",
-        "vmenu.c", "vmenu.1",
-        "vmenu_path", "vmenu_run",
-        NULL
+        "LICENSE", "README", "build.c", "drw.h", "drw.c", "util.h", "util.c",
+        "vmenu.c", "vmenu.1", "vmenu_path", "vmenu_run", NULL
     };
     for (int i = 0; files[i]; i++)
         must("cp '%s' '%s/'", files[i], dir);
@@ -281,22 +386,32 @@ static void do_dist(void)
     printf("Created: %s\n", tgz);
 }
 
+/* ── Usage ──────────────────────────────────────────────────────────────── */
+
 static void usage(const char *argv0)
 {
-    fprintf(stderr,
-        "usage: %s [command]\n"
+    printf(
+        "usage: %s [command] [type]\n"
         "\n"
         "Commands:\n"
-        "  (none)       Build vmenu (default)\n"
-        "  clean        Remove build artifacts\n"
-        "  install      Install to PREFIX\n"
-        "  uninstall    Remove from PREFIX\n"
-        "  dist         Create source tarball\n"
+        "  build            Build target (default type: dev)\n"
+        "  run              Run target (default type: dev)\n"
+        "  build-run        Build and run target (default type: dev)\n"
+        "  build-debugger   Build debugger target (type: debug)\n"
+        "  clean            Remove build artifacts\n"
+        "  install          Install release build to PREFIX\n"
+        "  uninstall        Remove installed files\n"
+        "  dist             Create source tarball\n"
+        "\n"
+        "Types:\n"
+        "  dev              Debug-friendly + sanitizers → " BUILD_DIR "/vmenu_dev\n"
+        "  debug            Debug-friendly + no sanitizers → " BUILD_DIR "/vmenu_debug\n"
+        "  release          Highly optimized → " BUILD_DIR "/vmenu\n"
         "\n"
         "Environment:\n"
-        "  DESTDIR      Staging directory prefix  (default: empty)\n"
-        "  PREFIX       Install prefix            (default: " PREFIX ")\n"
-        "  MANPREFIX    Man page install prefix   (default: " MANPREFIX ")\n",
+        "  DESTDIR          Staging prefix      (default: empty)\n"
+        "  PREFIX           Install prefix      (default: " PREFIX ")\n"
+        "  MANPREFIX        Man page prefix     (default: " MANPREFIX ")\n",
         argv0);
 }
 
@@ -306,22 +421,103 @@ int main(int argc, char *argv[])
 {
     self_rebuild(argc, argv);
 
+    /* default: build dev */
     if (argc < 2) {
-        build_vmenu();
+        do_build(BUILD_DEV);
         return 0;
     }
 
     const char *cmd = argv[1];
 
-    if (strcmp(cmd, "clean") == 0)           do_clean();
-    else if (strcmp(cmd, "install") == 0)  { build_vmenu(); do_install(); }
-    else if (strcmp(cmd, "uninstall") == 0)  do_uninstall();
-    else if (strcmp(cmd, "dist") == 0)       do_dist();
-    else {
-        fprintf(stderr, "error: unknown command '%s'\n\n", cmd);
-        usage(argv[0]);
-        return 1;
+    if (strcmp(cmd, "build") == 0) {
+        Build_Type t = BUILD_DEV;
+        if (argc >= 3) {
+            if (strcmp(argv[2], "release") == 0)
+                t = BUILD_RELEASE;
+            else if (strcmp(argv[2], "debug") == 0)
+                t = BUILD_DEBUG;
+            else if (strcmp(argv[2], "dev") == 0)
+                t = BUILD_DEV;
+            else {
+                fprintf(stderr, "error: unknown build type '%s'\n", argv[2]);
+                return 1;
+            }
+        }
+        do_build(t);
+        return 0;
     }
 
-    return 0;
+    if (strcmp(cmd, "run") == 0) {
+        Build_Type t = BUILD_DEV;
+        int arg_start = 2;
+        if (argc >= 3) {
+            if (strcmp(argv[2], "release") == 0) {
+                t = BUILD_RELEASE;
+                arg_start = 3;
+            } else if (strcmp(argv[2], "debug") == 0) {
+                t = BUILD_DEBUG;
+                arg_start = 3;
+            } else if (strcmp(argv[2], "dev") == 0) {
+                t = BUILD_DEV;
+                arg_start = 3;
+            }
+        }
+        do_run(t, argc, argv, arg_start);
+        return 0;
+    }
+
+    if (strcmp(cmd, "build-run") == 0) {
+        Build_Type t = BUILD_DEV;
+        int arg_start = 2;
+        if (argc >= 3) {
+            if (strcmp(argv[2], "release") == 0) {
+                t = BUILD_RELEASE;
+                arg_start = 3;
+            } else if (strcmp(argv[2], "debug") == 0) {
+                t = BUILD_DEBUG;
+                arg_start = 3;
+            } else if (strcmp(argv[2], "dev") == 0) {
+                t = BUILD_DEV;
+                arg_start = 3;
+            }
+        }
+        do_build(t);
+        do_run(t, argc, argv, arg_start);
+        return 0;
+    }
+
+    if (strcmp(cmd, "build-debugger") == 0) {
+        do_build(BUILD_DEBUG);
+        return 0;
+    }
+
+    if (strcmp(cmd, "clean") == 0) {
+        do_clean();
+        return 0;
+    }
+
+    if (strcmp(cmd, "install") == 0) {
+        do_build(BUILD_RELEASE);
+        do_install();
+        return 0;
+    }
+
+    if (strcmp(cmd, "uninstall") == 0) {
+        do_uninstall();
+        return 0;
+    }
+
+    if (strcmp(cmd, "dist") == 0) {
+        do_dist();
+        return 0;
+    }
+
+    if (strcmp(cmd, "--help") == 0 || strcmp(cmd, "-h") == 0) {
+        usage(argv[0]);
+        return 0;
+    }
+
+    fprintf(stderr, "error: unknown command '%s'\n\n", cmd);
+    usage(argv[0]);
+    return 1;
 }
