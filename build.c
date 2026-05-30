@@ -35,7 +35,7 @@
 
 /* ── Configuration ──────────────────────────────────────────────────────── */
 
-#define VERSION     "5.4"
+#define VERSION     "2026.05"
 #define BUILD_DIR   "build"
 
 static const char *get_cc(void)
