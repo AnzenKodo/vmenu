@@ -1,26 +1,4 @@
-/* build.c - Build system for vmenu
- *
- * Bootstrap (first time only):
- *   mkdir -p build && cc -o build/build build.c
- *
- * After that, ./build/build re-compiles itself when build.c changes.
- *
- * Commands:
- *   ./build/build                    Build dev build     → build/vmenu_dev
- *   ./build/build dev                Build dev build     → build/vmenu_dev
- *   ./build/build debug              Build debug build   → build/vmenu_debug
- *   ./build/build release            Build release build → build/vmenu
- *   ./build/build run [type]         Build and run specified target
- *   ./build/build build-run [type]   Build and run specified target
- *   ./build/build build-debugger     Build debug build
- *   ./build/build clean              Remove build artifacts
- *   ./build/build install            Install release build to PREFIX
- *   ./build/build uninstall          Remove installed files
- *   ./build/build dist               Create source tarball
- *
- * Environment:
- *   DESTDIR, PREFIX, MANPREFIX
- */
+/* build.c - Build system for vmenu */
 
 #include <stdio.h>
 #include <stdlib.h>
