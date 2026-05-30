@@ -1018,15 +1018,15 @@ static const char default_config_content[] =
 	"# This file is read at runtime. Command line arguments override these settings.\n"
 	"\n"
 	"# Appearance\n"
-	"instant = 0\n"
+	"instant = 1\n"
 	"centered = 0\n"
 	"topbar = 1\n"
 	"font = \"monospace:size=10\"\n"
 	"prompt = \"\"\n"
 	"\n"
 	"# Normal colors\n"
-	"normal_background = \"#222222\"\n"
-	"normal_foreground = \"#bbbbbb\"\n"
+	"normal_background = \"#32302F\"\n"
+	"normal_foreground = \"#D4BE98\"\n"
 	"\n"
 	"# Selected colors\n"
 	"selected_background = \"#005577\"\n"
@@ -1045,8 +1045,7 @@ static const char default_config_content[] =
 	"outline_highlight_foreground = \"#ffc978\"\n"
 	"\n"
 	"# Border settings\n"
-	"border_background = \"\"\n"
-	"border_foreground = \"#cccccc\"\n"
+	"border_color = \"#D8A657\"\n"
 	"border_width = 0\n"
 	"\n"
 	"# Layout settings\n"
@@ -1058,7 +1057,7 @@ static const char default_config_content[] =
 	"\n"
 	"# Behavior\n"
 	"worddelimiters = \" \"\n"
-	"case_insensitive = 0\n";
+	"case_insensitive = 1\n";
 
 static const char *get_home_dir(void) {
 	const char *home = getenv("HOME");
@@ -1265,10 +1264,7 @@ static void read_config(const char *path) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
 				colors[SchemeOutHighlight][ColFg] = strdup(parsed);
-		} else if (strcmp(key, "border_background") == 0) {
-			char *parsed = parse_string(val);
-			colors[SchemeBorder][ColBg] = (parsed[0] != '\0') ? strdup(parsed) : NULL;
-		} else if (strcmp(key, "border_foreground") == 0) {
+		} else if (strcmp(key, "border_color") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
 				colors[SchemeBorder][ColFg] = strdup(parsed);
