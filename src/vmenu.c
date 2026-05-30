@@ -1372,7 +1372,8 @@ main(int argc, char *argv[])
 			if (stat(path, &st) != 0) {
 				/* config not found — auto-generate and notify */
 				write_default_config(path);
-				fprintf(stderr, "info: config not found, generated default at: %s\n", path);
+				if (isatty(STDIN_FILENO))
+					fprintf(stderr, "info: config not found, generated default at: %s\n", path);
 			}
 			read_config(path);
 		}
