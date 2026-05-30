@@ -16,6 +16,7 @@
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 #include <X11/Xutil.h>
+#include <X11/keysym.h>
 #ifdef XINERAMA
 #include <X11/extensions/Xinerama.h>
 #endif
@@ -48,6 +49,7 @@ static struct item *items = NULL;
 static struct item *matches, *matchend;
 static struct item *prev, *curr, *next, *sel;
 static int mon = -1, screen;
+static int grabbed = 1;
 
 static Atom clip, utf8;
 static Display *dpy;
@@ -374,22 +376,22 @@ grabfocus(void)
 	die("cannot grab focus");
 }
 
-static void
+static int
 grabkeyboard(void)
 {
 	struct timespec ts = { .tv_sec = 0, .tv_nsec = 1000000  };
 	int i;
 
 	if (embed)
-		return;
+		return 1;
 	/* try to grab keyboard, we may have to wait for another process to ungrab */
 	for (i = 0; i < 1000; i++) {
 		if (XGrabKeyboard(dpy, DefaultRootWindow(dpy), True, GrabModeAsync,
 		                  GrabModeAsync, CurrentTime) == GrabSuccess)
-			return;
+			return 1;
 		nanosleep(&ts, NULL);
 	}
-	die("cannot grab keyboard");
+	return 0;
 }
 
 static void
@@ -520,6 +522,20 @@ keypress(XKeyEvent *ev)
 	case XLookupKeySym:
 	case XLookupBoth: /* a KeySym and a string are returned: use keysym */
 		break;
+	}
+
+	if (ksym == XK_Print) {
+		XUngrabKeyboard(dpy, CurrentTime);
+		XSetInputFocus(dpy, win, RevertToParent, CurrentTime);
+		ev->window = DefaultRootWindow(dpy);
+		XSendEvent(dpy, DefaultRootWindow(dpy), True, KeyPressMask, (XEvent *)ev);
+		grabbed = 0;
+		return;
+	}
+
+	if (!grabbed) {
+		if (grabkeyboard())
+			grabbed = 1;
 	}
 
 	if (ev->state & ControlMask) {
@@ -1603,11 +1619,13 @@ main(int argc, char *argv[])
 #endif
 
 	if (fast && !isatty(0)) {
-		grabkeyboard();
+		if (!grabkeyboard())
+			die("cannot grab keyboard");
 		readstdin();
 	} else {
 		readstdin();
-		grabkeyboard();
+		if (!grabkeyboard())
+			die("cannot grab keyboard");
 	}
 	setup();
 	run();
