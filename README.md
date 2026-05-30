@@ -12,14 +12,14 @@
 
 This fork incorporates several popular patches and enhancements to improve user experience:
 
-- **Grid Layout**: Support for horizontal and vertical grid columns using the `-G` / `--columns` options.
-- **Grid Navigation**: Arrow keys allow navigating between columns and rows seamlessly.
-- **Centered Window**: Center the menu on the monitor with `-c` / `--centered`.
-- **Custom Borders**: Define border thickness and color with `-bw` / `--border-width` and `-bc` / `--border-color`.
-- **Fuzzy Highlights**: Highlights matching text segments inside the menu options.
-- **Instant Select**: Instantly confirm selection when only a single match remains using `-n` / `--instant`.
-- **Line Height**: Custom height options for menu lines using `-h` / `--height`.
-- **Mouse Support**: Select and interact with menu items using mouse clicks.
+- [Grid Layout](patchs/dmenu-grid-4.9.diff): Support for horizontal and vertical grid columns using the `-G` / `--columns` options.
+- [Grid Navigation](patchs/dmenu-gridnav-5.0.diff): Arrow keys allow navigating between columns and rows seamlessly.
+- [Centered Window](patchs/dmenu-center-4.8.diff): Center the menu on the monitor with `-c` / `--centered`.
+- [Custom Borders](patchs/dmenu-border-4.9.diff): Define border thickness and color with `-bw` / `--border-width` and `-bc` / `--border-color`.
+- [Fuzzy Highlights](patchs/dmenu-highlight-4.9.diff): Highlights matching text segments inside the menu options.
+- [Instant Select](patchs/dmenu-instant-5.3.diff): Instantly confirm selection when only a single match remains using `-n` / `--instant`.
+- [Line Height](patchs/dmenu-lineheight-5.2.diff): Custom height options for menu lines using `-h` / `--height`.
+- [Mouse Support](patchs/dmenu-mousesupport-5.4.diff): Select and interact with menu items using mouse clicks.
 
 ## Dependencies
 
