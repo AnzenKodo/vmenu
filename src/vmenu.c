@@ -91,6 +91,20 @@ static int custom_width = 0;
  */
 static const char *worddelimiters = " ";
 
+static int colors_allocated[SchemeLast][2] = {0};
+static int prompt_allocated = 0;
+static int worddelimiters_allocated = 0;
+static int font_allocated = 0;
+
+static void
+set_color(int scheme_idx, int color_idx, const char *val)
+{
+	if (colors_allocated[scheme_idx][color_idx])
+		free((char *)colors[scheme_idx][color_idx]);
+	colors[scheme_idx][color_idx] = strdup(val);
+	colors_allocated[scheme_idx][color_idx] = 1;
+}
+
 static int (*fstrncmp)(const char *, const char *, size_t) = strncmp;
 static char *(*fstrstr)(const char *, const char *) = strstr;
 
@@ -146,15 +160,59 @@ cleanup(void)
 {
 	size_t i;
 
-	XUngrabKeyboard(dpy, CurrentTime);
-	for (i = 0; i < SchemeLast; i++)
-		drw_scm_free(drw, scheme[i], 2);
-	for (i = 0; items && items[i].text; ++i)
-		free(items[i].text);
-	free(items);
-	drw_free(drw);
-	XSync(dpy, False);
-	XCloseDisplay(dpy);
+	if (dpy) {
+		XUngrabKeyboard(dpy, CurrentTime);
+	}
+	for (i = 0; i < SchemeLast; i++) {
+		if (drw && scheme[i]) {
+			drw_scm_free(drw, scheme[i], 2);
+			scheme[i] = NULL;
+		}
+	}
+	if (items) {
+		for (i = 0; items[i].text; ++i) {
+			free(items[i].text);
+			items[i].text = NULL;
+		}
+		free(items);
+		items = NULL;
+	}
+	if (drw) {
+		drw_free(drw);
+		drw = NULL;
+	}
+	if (dpy) {
+		XSync(dpy, False);
+		XCloseDisplay(dpy);
+		dpy = NULL;
+	}
+	for (i = 0; i < SchemeLast; i++) {
+		if (colors_allocated[i][ColFg]) {
+			free((char *)colors[i][ColFg]);
+			colors[i][ColFg] = NULL;
+			colors_allocated[i][ColFg] = 0;
+		}
+		if (colors_allocated[i][ColBg]) {
+			free((char *)colors[i][ColBg]);
+			colors[i][ColBg] = NULL;
+			colors_allocated[i][ColBg] = 0;
+		}
+	}
+	if (prompt_allocated) {
+		free((char *)prompt);
+		prompt = NULL;
+		prompt_allocated = 0;
+	}
+	if (worddelimiters_allocated) {
+		free((char *)worddelimiters);
+		worddelimiters = NULL;
+		worddelimiters_allocated = 0;
+	}
+	if (font_allocated) {
+		free((char *)fonts[0]);
+		fonts[0] = NULL;
+		font_allocated = 0;
+	}
 	FcFini();
 }
 
@@ -1029,8 +1087,8 @@ static const char default_config_content[] =
 	"normal_foreground = \"#D4BE98\"\n"
 	"\n"
 	"# Selected colors\n"
-	"selected_background = \"#005577\"\n"
-	"selected_foreground = \"#eeeeee\"\n"
+	"selected_background = \"#D8A657\"\n"
+	"selected_foreground = \"#32302F\"\n"
 	"\n"
 	"# Outline colors\n"
 	"outline_background = \"#00ffff\"\n"
@@ -1046,7 +1104,7 @@ static const char default_config_content[] =
 	"\n"
 	"# Border settings\n"
 	"border_color = \"#D8A657\"\n"
-	"border_width = 0\n"
+	"border_width = 3\n"
 	"\n"
 	"# Layout settings\n"
 	"width = 0\n"
@@ -1212,62 +1270,69 @@ static void read_config(const char *path) {
 			topbar = atoi(val);
 		} else if (strcmp(key, "font") == 0) {
 			char *parsed = parse_string(val);
-			if (parsed[0] != '\0')
+			if (parsed[0] != '\0') {
+				if (font_allocated)
+					free((char *)fonts[0]);
 				fonts[0] = strdup(parsed);
+				font_allocated = 1;
+			}
 		} else if (strcmp(key, "prompt") == 0) {
+			if (prompt_allocated)
+				free((char *)prompt);
 			prompt = strdup(parse_string(val));
+			prompt_allocated = 1;
 		} else if (strcmp(key, "normal_background") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
-				colors[SchemeNorm][ColBg] = strdup(parsed);
+				set_color(SchemeNorm, ColBg, parsed);
 		} else if (strcmp(key, "normal_foreground") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
-				colors[SchemeNorm][ColFg] = strdup(parsed);
+				set_color(SchemeNorm, ColFg, parsed);
 		} else if (strcmp(key, "selected_background") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
-				colors[SchemeSel][ColBg] = strdup(parsed);
+				set_color(SchemeSel, ColBg, parsed);
 		} else if (strcmp(key, "selected_foreground") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
-				colors[SchemeSel][ColFg] = strdup(parsed);
+				set_color(SchemeSel, ColFg, parsed);
 		} else if (strcmp(key, "outline_background") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
-				colors[SchemeOut][ColBg] = strdup(parsed);
+				set_color(SchemeOut, ColBg, parsed);
 		} else if (strcmp(key, "outline_foreground") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
-				colors[SchemeOut][ColFg] = strdup(parsed);
+				set_color(SchemeOut, ColFg, parsed);
 		} else if (strcmp(key, "normal_highlight_background") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
-				colors[SchemeNormHighlight][ColBg] = strdup(parsed);
+				set_color(SchemeNormHighlight, ColBg, parsed);
 		} else if (strcmp(key, "normal_highlight_foreground") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
-				colors[SchemeNormHighlight][ColFg] = strdup(parsed);
+				set_color(SchemeNormHighlight, ColFg, parsed);
 		} else if (strcmp(key, "selected_highlight_background") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
-				colors[SchemeSelHighlight][ColBg] = strdup(parsed);
+				set_color(SchemeSelHighlight, ColBg, parsed);
 		} else if (strcmp(key, "selected_highlight_foreground") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
-				colors[SchemeSelHighlight][ColFg] = strdup(parsed);
+				set_color(SchemeSelHighlight, ColFg, parsed);
 		} else if (strcmp(key, "outline_highlight_background") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
-				colors[SchemeOutHighlight][ColBg] = strdup(parsed);
+				set_color(SchemeOutHighlight, ColBg, parsed);
 		} else if (strcmp(key, "outline_highlight_foreground") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
-				colors[SchemeOutHighlight][ColFg] = strdup(parsed);
+				set_color(SchemeOutHighlight, ColFg, parsed);
 		} else if (strcmp(key, "border_color") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
-				colors[SchemeBorder][ColFg] = strdup(parsed);
+				set_color(SchemeBorder, ColFg, parsed);
 		} else if (strcmp(key, "lines") == 0) {
 			lines = atoi(val);
 			if (columns == 0) columns = 1;
@@ -1283,7 +1348,10 @@ static void read_config(const char *path) {
 		} else if (strcmp(key, "minimum_line_height") == 0) {
 			min_lineheight = atoi(val);
 		} else if (strcmp(key, "worddelimiters") == 0) {
+			if (worddelimiters_allocated)
+				free((char *)worddelimiters);
 			worddelimiters = strdup(parse_string(val));
+			worddelimiters_allocated = 1;
 		} else if (strcmp(key, "case_insensitive") == 0) {
 			if (atoi(val)) {
 				fstrncmp = strncasecmp;
@@ -1338,6 +1406,8 @@ main(int argc, char *argv[])
 	int generate_config = 0;         /* 1 = write config, then exit */
 	int print_config = 0;            /* 1 = dump default config to stdout, then exit */
 	const char *generate_config_path = NULL; /* optional custom path for --generate-config */
+
+	atexit(cleanup);
 
 	/* 1. Scan for config-related options first */
 	for (i = 1; i < argc; i++) {
@@ -1443,9 +1513,15 @@ main(int argc, char *argv[])
 			} else if (!strcmp(argv[i], "-m") || !strcmp(argv[i], "--monitor")) {
 				mon = atoi(argv[++i]);
 			} else if (!strcmp(argv[i], "-p") || !strcmp(argv[i], "--prompt")) {
-				prompt = argv[++i];
+				if (prompt_allocated)
+					free((char *)prompt);
+				prompt = strdup(argv[++i]);
+				prompt_allocated = 1;
 			} else if (!strcmp(argv[i], "-fn") || !strcmp(argv[i], "--font")) {
-				fonts[0] = argv[++i];
+				if (font_allocated)
+					free((char *)fonts[0]);
+				fonts[0] = strdup(argv[++i]);
+				font_allocated = 1;
 			} else if (!strcmp(argv[i], "-fs") || !strcmp(argv[i], "--font-size")) {
 				fontsize = argv[++i];
 			} else if (!strcmp(argv[i], "-nb") || !strcmp(argv[i], "--normal-background")) {
@@ -1511,7 +1587,10 @@ main(int argc, char *argv[])
 		} else {
 			snprintf(fontbuf, sizeof(fontbuf), "%s:size=%s", fn, fontsize);
 		}
-		fonts[0] = fontbuf;
+		if (font_allocated)
+			free((char *)fonts[0]);
+		fonts[0] = strdup(fontbuf);
+		font_allocated = 1;
 	}
 	drw = drw_create(dpy, screen, root, wa.width, wa.height);
 	if (!drw_fontset_create(drw, fonts, LENGTH(fonts)))
