@@ -1057,7 +1057,8 @@ static const char default_config_content[] =
 	"minimum_line_height = 8\n"
 	"\n"
 	"# Behavior\n"
-	"worddelimiters = \" \"\n";
+	"worddelimiters = \" \"\n"
+	"case_insensitive = 0\n";
 
 static const char *get_home_dir(void) {
 	const char *home = getenv("HOME");
@@ -1287,6 +1288,14 @@ static void read_config(const char *path) {
 			min_lineheight = atoi(val);
 		} else if (strcmp(key, "worddelimiters") == 0) {
 			worddelimiters = strdup(parse_string(val));
+		} else if (strcmp(key, "case_insensitive") == 0) {
+			if (atoi(val)) {
+				fstrncmp = strncasecmp;
+				fstrstr = cistrstr;
+			} else {
+				fstrncmp = strncmp;
+				fstrstr = strstr;
+			}
 		}
 	}
 	fclose(fp);
