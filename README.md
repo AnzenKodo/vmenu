@@ -90,15 +90,21 @@ Clean object files and built binaries safely while keeping the `build/build` exe
 - **Default Config Path**: Loads config from `$XDG_CONFIG_HOME/vmenu/config.conf` (usually `~/.config/vmenu/config.conf`) if it exists.
 - **Print Default Configuration**: Dump the built-in configuration template directly to standard output:
   ```bash
+  vmenu -pc
+  # or
   vmenu --print-config
   ```
 - **Generate Configuration File**: Write the default template to XDG config path or a custom path:
   ```bash
+  vmenu -g
+  # or
   vmenu --generate-config               # Writes to default path
   vmenu --generate-config /custom/path  # Writes to specified path
   ```
 - **Use Custom Configuration**: Force `vmenu` to load a configuration file from a specific location:
   ```bash
+  vmenu -cf /path/to/config.conf
+  # or
   vmenu --config /path/to/config.conf
   ```
 
