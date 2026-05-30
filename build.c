@@ -38,23 +38,17 @@
 #define BUILD_DIR   "build"
 
 static char version_buf[128] = "";
-static void get_dynamic_fallback(char *buf, size_t sz)
-{
-    time_t t = time(NULL);
-    struct tm *tm = localtime(&t);
-    if (tm) {
-        strftime(buf, sz, "%Y.%m", tm);
-    } else {
-        snprintf(buf, sz, "2026.05");
-    }
-}
-
 static const char *get_version(void)
 {
     if (version_buf[0] != '\0') return version_buf;
     FILE *fp = fopen("VERSION", "r");
     if (!fp) {
-        get_dynamic_fallback(version_buf, sizeof(version_buf));
+        time_t t = time(NULL);
+        struct tm *tm = localtime(&t);
+        if (tm)
+            snprintf(version_buf, sizeof(version_buf), "%04d.%02d", tm->tm_year + 1900, tm->tm_mon + 1);
+        else
+            strcpy(version_buf, "unknown-date");
         return version_buf;
     }
     if (fgets(version_buf, sizeof(version_buf), fp)) {
@@ -64,7 +58,12 @@ static const char *get_version(void)
             len--;
         }
     } else {
-        get_dynamic_fallback(version_buf, sizeof(version_buf));
+        time_t t = time(NULL);
+        struct tm *tm = localtime(&t);
+        if (tm)
+            snprintf(version_buf, sizeof(version_buf), "%04d.%02d", tm->tm_year + 1900, tm->tm_mon + 1);
+        else
+            strcpy(version_buf, "unknown-date");
     }
     fclose(fp);
     return version_buf;
