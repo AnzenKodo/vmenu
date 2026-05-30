@@ -67,7 +67,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG_NAME="2026.05.${{ github.run_number }}"
+          VERSION_VAL=$(cat VERSION | tr -d '\r\n ')
+          TAG_NAME="${VERSION_VAL}.${{ github.run_number }}"
           gh release create "$TAG_NAME" \
             --title "Release $TAG_NAME" \
             --notes "Automated build of vmenu for AMD64 and ARM64" \

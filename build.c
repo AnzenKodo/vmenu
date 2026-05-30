@@ -35,8 +35,30 @@
 
 /* ── Configuration ──────────────────────────────────────────────────────── */
 
-#define VERSION     "2026.05"
 #define BUILD_DIR   "build"
+
+static char version_buf[128] = "";
+static const char *get_version(void)
+{
+    if (version_buf[0] != '\0') return version_buf;
+    FILE *fp = fopen("VERSION", "r");
+    if (!fp) {
+        strcpy(version_buf, "2026.05");
+        return version_buf;
+    }
+    if (fgets(version_buf, sizeof(version_buf), fp)) {
+        size_t len = strlen(version_buf);
+        while (len > 0 && (version_buf[len-1] == '\r' || version_buf[len-1] == '\n' || version_buf[len-1] == ' ' || version_buf[len-1] == '\t')) {
+            version_buf[len-1] = '\0';
+            len--;
+        }
+    } else {
+        strcpy(version_buf, "2026.05");
+    }
+    fclose(fp);
+    return version_buf;
+}
+#define VERSION get_version()
 
 static const char *get_cc(void)
 {
@@ -62,7 +84,6 @@ static const char *get_cc(void)
     " -I" X11INC " -I" FREETYPEINC \
     " -D_DEFAULT_SOURCE -D_BSD_SOURCE" \
     " -D_XOPEN_SOURCE=700 -D_POSIX_C_SOURCE=200809L" \
-    " -DVERSION=\\\"" VERSION "\\\"" \
     " -DXINERAMA"
 
 /* Release: optimized, no debug symbols */
@@ -235,7 +256,9 @@ static int compile_obj(const char *src, Build_Type t)
         default:            cflags = CFLAGS_DEV;     break;
     }
 
-    must("%s -c %s -o %s %s", CC, cflags, obj, src);
+    char cflags_buf[8192];
+    snprintf(cflags_buf, sizeof(cflags_buf), "%s -DVERSION=\\\"%s\\\"", cflags, VERSION);
+    must("%s -c %s -o %s %s", CC, cflags_buf, obj, src);
     return 0;
 }
 
@@ -246,7 +269,7 @@ static void do_build(Build_Type t)
     char bin[512];
     bin_path(t, bin, sizeof bin);
 
-    printf("Building vmenu " VERSION " [%s] → %s\n", build_type_name(t), bin);
+    printf("Building vmenu %s [%s] → %s\n", VERSION, build_type_name(t), bin);
     mkdirp(BUILD_DIR);
 
     int any_rebuilt = 0;
@@ -305,7 +328,7 @@ static void do_clean(void)
     run("rm -f " BUILD_DIR "/*.o");
     run("rm -f " BUILD_DIR "/vmenu " BUILD_DIR "/vmenu_dev " BUILD_DIR "/vmenu_debug");
     run("rm -f vmenu vmenu.o drw.o util.o dmenu.o stest.o a.out");
-    run("rm -f vmenu-" VERSION ".tar.gz");
+    run("rm -f vmenu-%s.tar.gz", VERSION);
     printf("Clean.\n");
 }
 
@@ -340,7 +363,7 @@ static void do_install(void)
 
     printf("Installing man page → %s\n", man1dir);
     mkdirp(man1dir);
-    must("sed 's/VERSION/" VERSION "/g' < vmenu.1 > '%s/vmenu.1'", man1dir);
+    must("sed 's/VERSION/%s/g' < man/vmenu.1 > '%s/vmenu.1'", VERSION, man1dir);
     must("chmod 644 '%s/vmenu.1'", man1dir);
 
     printf("Installed.\n");
@@ -367,16 +390,18 @@ static void do_uninstall(void)
 
 static void do_dist(void)
 {
-    const char *dir = "vmenu-" VERSION;
-    const char *tgz = "vmenu-" VERSION ".tar.gz";
+    char dir[512];
+    char tgz[512];
+    snprintf(dir, sizeof(dir), "vmenu-%s", VERSION);
+    snprintf(tgz, sizeof(tgz), "vmenu-%s.tar.gz", VERSION);
 
     printf("Creating %s...\n", tgz);
     run("rm -rf '%s'", dir);
     mkdirp(dir);
 
     const char *files[] = {
-        "LICENSE", "README", "build.c", "drw.h", "drw.c", "util.h", "util.c",
-        "vmenu.c", "vmenu.1", "vmenu_path", "vmenu_run", NULL
+        "LICENSE", "README.md", "build.c", "drw.h", "drw.c", "util.h", "util.c",
+        "vmenu.c", "man/vmenu.1", NULL
     };
     for (int i = 0; files[i]; i++)
         must("cp '%s' '%s/'", files[i], dir);
@@ -391,13 +416,14 @@ static void do_dist(void)
 static void usage(const char *argv0)
 {
     printf(
-        "usage: %s [command] [type]\n"
+        "usage: %s [command] [type/args]\n"
         "\n"
         "Commands:\n"
         "  build            Build target (default type: dev)\n"
         "  run              Run target (default type: dev)\n"
         "  build-run        Build and run target (default type: dev)\n"
         "  build-debugger   Build debugger target (type: debug)\n"
+        "  set-version      Set version number (writes to VERSION file)\n"
         "  clean            Remove build artifacts\n"
         "  install          Install release build to PREFIX\n"
         "  uninstall        Remove installed files\n"
@@ -509,6 +535,22 @@ int main(int argc, char *argv[])
 
     if (strcmp(cmd, "dist") == 0) {
         do_dist();
+        return 0;
+    }
+
+    if (strcmp(cmd, "set-version") == 0) {
+        if (argc < 3) {
+            fprintf(stderr, "error: missing version argument\n");
+            return 1;
+        }
+        FILE *fp = fopen("VERSION", "w");
+        if (!fp) {
+            fprintf(stderr, "error: could not write to VERSION file\n");
+            return 1;
+        }
+        fprintf(fp, "%s\n", argv[2]);
+        fclose(fp);
+        printf("Version updated to: %s\n", argv[2]);
         return 0;
     }
 
