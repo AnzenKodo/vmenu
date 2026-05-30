@@ -155,6 +155,7 @@ cleanup(void)
 	drw_free(drw);
 	XSync(dpy, False);
 	XCloseDisplay(dpy);
+	FcFini();
 }
 
 static char *
