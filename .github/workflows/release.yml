@@ -21,6 +21,23 @@ jobs:
       - name: Install Multi-arch and Dependencies
         run: |
           sudo dpkg --add-architecture arm64
+          
+          # Restrict default sources to amd64
+          if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
+            sudo sed -i '/^URIs:/i Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources
+          fi
+          if [ -f /etc/apt/sources.list ]; then
+            sudo sed -i 's/^deb http/deb [arch=amd64] http/g' /etc/apt/sources.list
+          fi
+          
+          # Add arm64 ports repositories
+          SUITE=$(lsb_release -c -s)
+          sudo tee /etc/apt/sources.list.d/arm64.list <<EOF
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${SUITE} main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${SUITE}-updates main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${SUITE}-security main restricted universe multiverse
+          EOF
+          
           sudo apt-get update
           
           # Install X11 and freetype dependencies for host (AMD64)
