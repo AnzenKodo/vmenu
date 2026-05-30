@@ -83,6 +83,7 @@ static unsigned int border_width = 0;
 /* -h option; minimum height of a menu line */
 static unsigned int lineheight = 0;
 static unsigned int min_lineheight = 8;
+static int custom_width = 0;
 
 /*
  * Characters not considered part of a word while deleting words
@@ -925,14 +926,14 @@ setup(void)
 					break;
 
 		if (centered) {
-			mw = MIN(MAX(max_textw() + promptw, 100), info[i].width);
-			mw = MIN((int)(mw + 2 * border_width), (int)info[i].width);
+			mw = (custom_width > 0) ? custom_width : MAX(max_textw() + promptw, 100);
+			mw = MIN(mw, (int)info[i].width);
 			x = info[i].x_org + ((info[i].width  - mw) / 2);
 			y = info[i].y_org + ((info[i].height - mh) / 2);
 		} else {
 			x = info[i].x_org;
 			y = info[i].y_org + (topbar ? 0 : info[i].height - mh);
-			mw = info[i].width;
+			mw = (custom_width > 0) ? MIN(custom_width, (int)info[i].width) : info[i].width;
 		}
 		XFree(info);
 	} else
@@ -942,14 +943,14 @@ setup(void)
 			die("could not get embedding window attributes: 0x%lx",
 			    parentwin);
 		if (centered) {
-			mw = MIN(MAX(max_textw() + promptw, 100), wa.width);
-			mw = MIN((int)(mw + 2 * border_width), wa.width);
+			mw = (custom_width > 0) ? custom_width : MAX(max_textw() + promptw, 100);
+			mw = MIN(mw, wa.width);
 			x = (wa.width  - mw) / 2;
 			y = (wa.height - mh) / 2;
 		} else {
 			x = 0;
 			y = topbar ? 0 : wa.height - mh;
-			mw = wa.width;
+			mw = (custom_width > 0) ? MIN(custom_width, wa.width) : wa.width;
 		}
 	}
 	inputw = mw / 3; /* input width: ~33% of monitor width */
@@ -1027,6 +1028,7 @@ static const char default_config_content[] =
 	"border_width = 0\n"
 	"\n"
 	"# Layout settings\n"
+	"width = 0\n"
 	"lines = 0\n"
 	"columns = 1\n"
 	"line_height = 0\n"
@@ -1253,6 +1255,8 @@ static void read_config(const char *path) {
 		} else if (strcmp(key, "columns") == 0) {
 			columns = atoi(val);
 			if (columns == 0) columns = 1;
+		} else if (strcmp(key, "width") == 0) {
+			custom_width = atoi(val);
 		} else if (strcmp(key, "border_width") == 0) {
 			border_width = atoi(val);
 		} else if (strcmp(key, "line_height") == 0) {
@@ -1272,7 +1276,7 @@ usage(void)
 	die("usage: vmenu [-b|--bottom] [-c|--centered] [-f|--fast] [-i|--case-insensitive]\n"
 	    "             [-n|--instant] [-v|--version] [-pc|--print-config]\n"
 	    "             [-g|--generate-config [path]] [-l|--lines lines]\n"
-	    "             [-G|--columns columns] [-h|--height height]\n"
+	    "             [-G|--columns columns] [-h|--height height] [-W|--width width]\n"
 	    "             [-p|--prompt prompt] [-fn|--font font] [-fs|--font-size size]\n"
 	    "             [-m|--monitor monitor]\n"
 	    "             [-nb|--normal-background color] [-nf|--normal-foreground color]\n"
@@ -1417,6 +1421,8 @@ main(int argc, char *argv[])
 				border_width = atoi(argv[++i]);
 			} else if (!strcmp(argv[i], "-bc") || !strcmp(argv[i], "--border-color")) {
 				colors[SchemeBorder][ColFg] = argv[++i];
+			} else if (!strcmp(argv[i], "-W") || !strcmp(argv[i], "--width")) {
+				custom_width = atoi(argv[++i]);
 			} else if (!strcmp(argv[i], "-w") || !strcmp(argv[i], "--window-id")) {
 				embed = argv[++i];
 			} else {
