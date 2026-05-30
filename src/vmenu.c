@@ -1308,6 +1308,21 @@ usage(void)
 	    "             [-w|--window-id windowid] [-cf|--config configfile]");
 }
 
+static int (*old_error_handler)(Display *, XErrorEvent *);
+static int xerror_flag = 0;
+
+static int
+temp_xerror_handler(Display *dpy, XErrorEvent *ee)
+{
+	if (ee->error_code == BadWindow) {
+		xerror_flag = 1;
+		return 0;
+	}
+	if (old_error_handler)
+		return old_error_handler(dpy, ee);
+	return 0;
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -1460,11 +1475,19 @@ main(int argc, char *argv[])
 		die("cannot open display");
 	screen = DefaultScreen(dpy);
 	root = RootWindow(dpy, screen);
-	if (!embed || !(parentwin = strtol(embed, NULL, 0)))
+	if (!embed || !(parentwin = strtol(embed, NULL, 0))) {
 		parentwin = root;
-	if (!XGetWindowAttributes(dpy, parentwin, &wa))
-		die("could not get embedding window attributes: 0x%lx",
-		    parentwin);
+		if (!XGetWindowAttributes(dpy, parentwin, &wa))
+			die("could not get embedding window attributes: 0x%lx", parentwin);
+	} else {
+		xerror_flag = 0;
+		old_error_handler = XSetErrorHandler(temp_xerror_handler);
+		int status = XGetWindowAttributes(dpy, parentwin, &wa);
+		XSync(dpy, False);
+		XSetErrorHandler(old_error_handler);
+		if (xerror_flag || !status)
+			die("invalid embed window id: %s", embed);
+	}
 	if (fontsize) {
 		static char fontbuf[256];
 		const char *fn = fonts[0];
