@@ -58,7 +58,7 @@ static const char *get_cc(void)
 
 /* Common flags shared by all build types */
 #define CFLAGS_COMMON \
-    "-std=c99 -pedantic -Wall -Wextra" \
+    "-std=c99 -pedantic -Wall -Wextra -Isrc" \
     " -I" X11INC " -I" FREETYPEINC \
     " -D_DEFAULT_SOURCE -D_BSD_SOURCE" \
     " -D_XOPEN_SOURCE=700 -D_POSIX_C_SOURCE=200809L" \
@@ -89,8 +89,8 @@ static const char *get_cc(void)
     LDFLAGS_STR " -fsanitize=address,undefined"
 
 /* Source files */
-static const char *vmenu_srcs[]    = { "vmenu.c", "drw.c", "util.c", NULL };
-static const char *vmenu_headers[] = { "drw.h", "util.h", NULL };
+static const char *vmenu_srcs[]    = { "src/vmenu.c", "src/drw.c", "src/util.c", NULL };
+static const char *vmenu_headers[] = { "src/drw.h", "src/util.h", "src/arg.h", NULL };
 
 /* ── Build type ─────────────────────────────────────────────────────────── */
 
@@ -377,12 +377,20 @@ static void do_dist(void)
     run("rm -rf '%s'", dir);
     mkdirp(dir);
 
+    char src_dir[512];
+    char man_dir[512];
+    snprintf(src_dir, sizeof(src_dir), "%s/src", dir);
+    snprintf(man_dir, sizeof(man_dir), "%s/man", dir);
+    mkdirp(src_dir);
+    mkdirp(man_dir);
+
     const char *files[] = {
-        "LICENSE", "README.md", "build.c", "drw.h", "drw.c", "util.h", "util.c",
-        "vmenu.c", "man/vmenu.1", NULL
+        "LICENSE", "README.md", "build.c", 
+        "src/drw.h", "src/drw.c", "src/util.h", "src/util.c",
+        "src/vmenu.c", "src/arg.h", "man/vmenu.1", NULL
     };
     for (int i = 0; files[i]; i++)
-        must("cp '%s' '%s/'", files[i], dir);
+        must("cp '%s' '%s/%s'", files[i], dir, files[i]);
 
     must("tar -czf '%s' '%s'", tgz, dir);
     run("rm -rf '%s'", dir);
