@@ -6,7 +6,7 @@
 
 ![vmenu screenshort](./assets/vmenu_screenshort.png)
 
-`vmenu` is an efficient, fast, and feature-rich dynamic menu for X, built as a fork of the classic `dmenu` tool. It reads a list of newline-separated items from standard input, presents an interactive menu, and prints the user's selection to standard output.
+`vmenu` is an efficient, fast, and feature-rich dynamic menu for X, built as a fork of the classic `dmenu` tool. This project is vibe coded with Google Antigravity with Gemini 3.5 Flash (Medium). It reads a list of newline-separated items from standard input, presents an interactive menu, and prints the user's selection to standard output.
 
 ## Features & Applied Patches
 
@@ -107,8 +107,3 @@ Automated release builds are published whenever changes are pushed to `master`/`
 - Binaries are distributed as **pure, unzipped executables**.
 - Builds are compiled for both **AMD64 (x86_64)** and **ARM64 (AArch64)** architectures.
 - Visit the **Releases** section on the GitHub repository page to download the standalone binaries: `vmenu-amd64` and `vmenu-arm64`.
-
-## Credits
-
-This project is vibe coded with Google Antigravity using Gemini 3.5 Flash (Medium).
-
