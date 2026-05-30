@@ -1,7 +1,7 @@
 # vmenu - a vibe coded fork of dmenu
 
 <p align="center">
-  <img src="assets/vmenu_logo.png" alt="vmenu logo" width="300" />
+  <img src="assets/vmenu_icon.png" alt="vmenu logo" width="300" />
 </p>
 
 ![vmenu screenshort](./assets/vmenu_screenshort.png)
@@ -107,3 +107,8 @@ Automated release builds are published whenever changes are pushed to `master`/`
 - Binaries are distributed as **pure, unzipped executables**.
 - Builds are compiled for both **AMD64 (x86_64)** and **ARM64 (AArch64)** architectures.
 - Visit the **Releases** section on the GitHub repository page to download the standalone binaries: `vmenu-amd64` and `vmenu-arm64`.
+
+## Credits
+
+This project is vibe coded with Google Antigravity using Gemini 3.5 Flash (Medium).
+
