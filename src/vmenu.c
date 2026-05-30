@@ -231,9 +231,11 @@ drawitem(struct item *item, int x, int y, int w)
 static void
 drawmenu(void)
 {
-	unsigned int curpos;
+	static int curpos, oldcurlen;
 	struct item *item;
 	int x = border_width, y = border_width, fh = drw->fonts->h, w;
+	int curlen, rcurlen;
+	int input_x;
 
 	if (border_width) {
 		drw_setscheme(drw, scheme[SchemeBorder]);
@@ -247,14 +249,25 @@ drawmenu(void)
 		x = drw_text(drw, x, border_width, promptw, bh, lrpad / 2, prompt, 0);
 	}
 	/* draw input field */
+	input_x = x;
 	w = (lines > 0 || !matches) ? (int)(mw - x - border_width) : inputw;
-	drw_text(drw, x, border_width, w, bh, lrpad / 2, text, 0);
+	w -= lrpad / 2;
+	x += lrpad / 2;
 
-	curpos = TEXTW(text) - TEXTW(&text[cursor]);
-	if ((curpos += lrpad / 2 - 1) < (unsigned int)w) {
-		drw_setscheme(drw, scheme[SchemeNorm]);
-		drw_rect(drw, x + curpos, border_width + 2 + (bh - fh) / 2, 2, fh - 4, 1, 0);
-	}
+	rcurlen = (int)drw_fontset_getwidth(drw, text + cursor);
+	curlen = (int)drw_fontset_getwidth(drw, text) - rcurlen;
+	curpos += curlen - oldcurlen;
+	curpos = MIN(w, MAX(0, curpos));
+	curpos = MAX(curpos, w - rcurlen);
+	curpos = MIN(curpos, curlen);
+	oldcurlen = curlen;
+
+	drw_setscheme(drw, scheme[SchemeNorm]);
+	drw_text_align(drw, x, border_width, (unsigned int)curpos, bh, text, cursor, AlignR);
+	drw_text_align(drw, x + curpos, border_width, (unsigned int)(w - curpos), bh, text + cursor, (int)(strlen(text) - cursor), AlignL);
+	drw_rect(drw, x + curpos - 1, border_width + 2 + (bh - fh) / 2, 2, fh - 4, 1, 0);
+
+	x = input_x;
 
 	if (lines > 0) {
 		/* draw grid */
@@ -385,12 +398,20 @@ match(void)
 static void
 insert(const char *str, ssize_t n)
 {
-	if (strlen(text) + n > sizeof text - 1)
+	if (cursor >= sizeof text)
+		return;
+	if (n > 0 && strlen(text) + n > sizeof text - 1)
 		return;
 	/* move existing text out of the way, insert new text, and update cursor */
-	memmove(&text[cursor + n], &text[cursor], sizeof text - cursor - MAX(n, 0));
-	if (n > 0)
-		memcpy(&text[cursor], str, n);
+	if (n > 0) {
+		size_t un = (size_t)n;
+		memmove(&text[cursor + un], &text[cursor], sizeof text - cursor - un);
+		if (str)
+			memcpy(&text[cursor], str, un);
+	} else if (n < 0) {
+		size_t abs_n = (size_t)(-n);
+		memmove(&text[cursor - abs_n], &text[cursor], sizeof text - cursor);
+	}
 	cursor += n;
 	match();
 }
@@ -466,13 +487,13 @@ keypress(XKeyEvent *ev)
 			match();
 			break;
 		case XK_u: /* delete left */
-			insert(NULL, 0 - cursor);
+			insert(NULL, -(ssize_t)cursor);
 			break;
 		case XK_w: /* delete word */
 			while (cursor > 0 && strchr(worddelimiters, text[nextrune(-1)]))
-				insert(NULL, nextrune(-1) - cursor);
+				insert(NULL, (ssize_t)nextrune(-1) - (ssize_t)cursor);
 			while (cursor > 0 && !strchr(worddelimiters, text[nextrune(-1)]))
-				insert(NULL, nextrune(-1) - cursor);
+				insert(NULL, (ssize_t)nextrune(-1) - (ssize_t)cursor);
 			break;
 		case XK_y: /* paste selection */
 		case XK_Y:
@@ -530,7 +551,7 @@ insert:
 	case XK_BackSpace:
 		if (cursor == 0)
 			return;
-		insert(NULL, nextrune(-1) - cursor);
+		insert(NULL, (ssize_t)nextrune(-1) - (ssize_t)cursor);
 		break;
 	case XK_End:
 	case XK_KP_End:
@@ -700,7 +721,7 @@ buttonpress(XEvent *e)
 	   ((lines <= 0 && ev->x >= (int)border_width && ev->x <= x + w +
 	   ((!prev || !curr->left) ? (int)TEXTW("<") : 0)) ||
 	   (lines > 0 && ev->y >= y && ev->y <= y + h))) {
-		insert(NULL, -cursor);
+		insert(NULL, -(ssize_t)cursor);
 		drawmenu();
 		return;
 	}
