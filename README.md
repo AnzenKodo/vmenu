@@ -20,6 +20,10 @@ This fork incorporates several popular patches and enhancements to improve user 
 - [Instant Select](patchs/dmenu-instant-5.3.diff): Instantly confirm selection when only a single match remains using `-n` / `--instant`.
 - [Line Height](patchs/dmenu-lineheight-5.2.diff): Custom height options for menu lines using `-h` / `--height`.
 - [Mouse Support](patchs/dmenu-mousesupport-5.4.diff): Select and interact with menu items using mouse clicks.
+- [Scroll Support](patchs/dmenu-scroll-20180607-a314412.diff): Seamless scrolling capability when items exceed the list limits.
+- **Custom Width**: Custom window width setting using the `-W` / `--width` flag.
+- **Case-Insensitive Mode**: Toggle case-insensitivity at runtime using the `case_insensitive` parameter in config or command-line flags.
+- **Print Screen Pass-Through**: Releasing keyboard grab dynamically on Print Screen (`XK_Print`) press to let system screenshot tools run.
 
 ## Dependencies
 
