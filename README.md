@@ -1,5 +1,9 @@
 # vmenu - a vibe coded fork of dmenu
 
+<p align="center">
+  <img src="assets/vmenu_logo.png" alt="vmenu logo" width="300" />
+</p>
+
 `vmenu` is an efficient, fast, and feature-rich dynamic menu for X, built as a fork of the classic `dmenu` tool. It reads a list of newline-separated items from standard input, presents an interactive menu, and prints the user's selection to standard output.
 
 ## Features & Applied Patches
