@@ -31,7 +31,7 @@
 #define TEXTW(X)              (drw_fontset_getwidth(drw, (X)) + lrpad)
 
 /* enums */
-enum { SchemeNorm, SchemeSel, SchemeOut, SchemeNormHighlight, SchemeSelHighlight, SchemeOutHighlight, SchemeBorder, SchemeLast }; /* color schemes */
+enum { SchemeNorm, SchemeSel, SchemeOut, SchemeNormHighlight, SchemeSelHighlight, SchemeOutHighlight, SchemeBorder, SchemePrompt, SchemeLast }; /* color schemes */
 
 struct item {
 	char *text;
@@ -62,6 +62,7 @@ static Clr *scheme[SchemeLast];
 static int instant = 0;                     /* -n  option; if 1, select single entry automatically */
 static int centered = 0;                    /* -c  option; if 1, vmenu appears in center of screen */
 static int topbar = 1;                      /* -b  option; if 0, vmenu appears at bottom     */
+static int inline_prompt = 1;               /* 1 = show prompt as placeholder inside input field */
 /* -fn option overrides fonts[0]; default X11 font or font set */
 static const char *fonts[] = {
 	"monospace:size=10"
@@ -76,6 +77,7 @@ static const char *colors[SchemeLast][2] = {
 	[SchemeNormHighlight] = { "#ffc978", "#222222" },
 	[SchemeOutHighlight] = { "#ffc978", "#00ffff" },
 	[SchemeBorder] = { "#cccccc", NULL },
+	[SchemePrompt] = { "#555555", "#222222" },
 };
 /* -l and -g options; controls number of lines and columns in grid if > 0 */
 static unsigned int lines      = 0;
@@ -305,8 +307,10 @@ drawmenu(void)
 	drw_rect(drw, border_width, border_width, mw - 2 * border_width, mh - 2 * border_width, 1, 1);
 
 	if (prompt && *prompt) {
-		drw_setscheme(drw, scheme[SchemeSel]);
-		x = drw_text(drw, x, border_width, promptw, bh, lrpad / 2, prompt, 0);
+		if (!inline_prompt) {
+			drw_setscheme(drw, scheme[SchemeSel]);
+			x = drw_text(drw, x, border_width, promptw, bh, lrpad / 2, prompt, 0);
+		}
 	}
 	/* draw input field */
 	input_x = x;
@@ -322,9 +326,14 @@ drawmenu(void)
 	curpos = MIN(curpos, curlen);
 	oldcurlen = curlen;
 
-	drw_setscheme(drw, scheme[SchemeNorm]);
-	drw_text_align(drw, x, border_width, (unsigned int)curpos, bh, text, cursor, AlignR);
-	drw_text_align(drw, x + curpos, border_width, (unsigned int)(w - curpos), bh, text + cursor, (int)(strlen(text) - cursor), AlignL);
+	if (inline_prompt && text[0] == '\0' && prompt && *prompt) {
+		drw_setscheme(drw, scheme[SchemePrompt]);
+		drw_text(drw, x, border_width, w, bh, lrpad / 2, prompt, 0);
+	} else {
+		drw_setscheme(drw, scheme[SchemeNorm]);
+		drw_text_align(drw, x, border_width, (unsigned int)curpos, bh, text, cursor, AlignR);
+		drw_text_align(drw, x + curpos, border_width, (unsigned int)(w - curpos), bh, text + cursor, (int)(strlen(text) - cursor), AlignL);
+	}
 	drw_rect(drw, x + curpos - 1, border_width + 2 + (bh - fh) / 2, 2, fh - 4, 1, 0);
 
 	x = input_x;
@@ -1095,8 +1104,9 @@ static const char default_config_content[] =
 	"instant = 1\n"
 	"centered = 0\n"
 	"topbar = 1\n"
-	"font = \"monospace:size=10\"\n"
+	"font = \"monospace:size=15\"\n"
 	"prompt = \"\"\n"
+	"inline_prompt = 1\n"
 	"\n"
 	"# Normal colors\n"
 	"normal_background = \"#32302F\"\n"
@@ -1105,6 +1115,10 @@ static const char default_config_content[] =
 	"# Selected colors\n"
 	"selected_background = \"#D8A657\"\n"
 	"selected_foreground = \"#32302F\"\n"
+	"\n"
+	"# Prompt colors\n"
+	"prompt_background = \"#32302F\"\n"
+	"prompt_foreground = \"#7C7F93\"\n"
 	"\n"
 	"# Outline colors\n"
 	"outline_background = \"#00ffff\"\n"
@@ -1184,6 +1198,7 @@ static int create_parent_dirs(const char *path) {
 	char temp[PATH_MAX];
 	char *p = NULL;
 	size_t len;
+	int found = 0;
 
 	snprintf(temp, sizeof(temp), "%s", path);
 	len = strlen(temp);
@@ -1193,9 +1208,13 @@ static int create_parent_dirs(const char *path) {
 	for (p = temp + len - 1; p > temp; p--) {
 		if (*p == '/') {
 			*p = '\0';
+			found = 1;
 			break;
 		}
 	}
+
+	if (!found)
+		return 0;
 
 	for (p = temp + 1; *p; p++) {
 		if (*p == '/') {
@@ -1280,6 +1299,8 @@ static void read_config(const char *path) {
 
 		if (strcmp(key, "instant") == 0) {
 			instant = atoi(val);
+		} else if (strcmp(key, "inline_prompt") == 0) {
+			inline_prompt = atoi(val);
 		} else if (strcmp(key, "centered") == 0) {
 			centered = atoi(val);
 		} else if (strcmp(key, "topbar") == 0) {
@@ -1313,6 +1334,14 @@ static void read_config(const char *path) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
 				set_color(SchemeSel, ColFg, parsed);
+		} else if (strcmp(key, "prompt_background") == 0) {
+			char *parsed = parse_string(val);
+			if (parsed[0] != '\0')
+				set_color(SchemePrompt, ColBg, parsed);
+		} else if (strcmp(key, "prompt_foreground") == 0) {
+			char *parsed = parse_string(val);
+			if (parsed[0] != '\0')
+				set_color(SchemePrompt, ColFg, parsed);
 		} else if (strcmp(key, "outline_background") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0')
@@ -1386,6 +1415,7 @@ usage(void)
 {
 	die("usage: vmenu [-b|--bottom] [-c|--centered] [-f|--fast] [-i|--case-insensitive]\n"
 	    "             [-n|--instant] [-v|--version] [-pc|--print-config]\n"
+	    "             [-ip|--inline-prompt] [-nip|--no-inline-prompt]\n"
 	    "             [-g|--generate-config [path]] [-l|--lines lines]\n"
 	    "             [-G|--columns columns] [-h|--height height] [-W|--width width]\n"
 	    "             [-p|--prompt prompt] [-fn|--font font] [-fs|--font-size size]\n"
@@ -1393,6 +1423,7 @@ usage(void)
 	    "             [-nb|--normal-background color] [-nf|--normal-foreground color]\n"
 	    "             [-sb|--selected-background color] [-sf|--selected-foreground color]\n"
 	    "             [-ob|--outline-background color] [-of|--outline-foreground color]\n"
+	    "             [-pb|--prompt-background color] [-pf|--prompt-foreground color]\n"
 	    "             [-bw|--border-width width] [-bc|--border-color color]\n"
 	    "             [-w|--window-id windowid] [-cf|--config configfile]");
 }
@@ -1458,6 +1489,24 @@ main(int argc, char *argv[])
 			fprintf(stderr, "error: could not resolve config path\n");
 			exit(1);
 		}
+		struct stat st;
+		if (stat(path, &st) == 0) {
+			printf("Configuration file already exists at: %s\n", path);
+			printf("Overwrite? [y/N]: ");
+			fflush(stdout);
+			char answer[16] = {0};
+			if (fgets(answer, sizeof(answer), stdin)) {
+				char *ans = answer;
+				while (isspace((unsigned char)*ans)) ans++;
+				if (*ans != 'y' && *ans != 'Y') {
+					printf("Aborted.\n");
+					exit(0);
+				}
+			} else {
+				printf("\nAborted.\n");
+				exit(0);
+			}
+		}
 		write_default_config(path);
 		printf("Default config generated at: %s\n", path);
 		exit(0);
@@ -1502,6 +1551,10 @@ main(int argc, char *argv[])
 			centered = 1;
 		} else if (!strcmp(argv[i], "-n") || !strcmp(argv[i], "--instant")) {
 			instant = 1;
+		} else if (!strcmp(argv[i], "-ip") || !strcmp(argv[i], "--inline-prompt")) {
+			inline_prompt = 1;
+		} else if (!strcmp(argv[i], "-nip") || !strcmp(argv[i], "--no-inline-prompt")) {
+			inline_prompt = 0;
 		} else if (!strcmp(argv[i], "-g") || !strcmp(argv[i], "--generate-config")) {
 			/* already handled — also skip optional path argument if present */
 			if (i + 1 < argc && argv[i + 1][0] != '-')
@@ -1552,6 +1605,10 @@ main(int argc, char *argv[])
 				colors[SchemeOut][ColBg] = argv[++i];
 			} else if (!strcmp(argv[i], "-of") || !strcmp(argv[i], "--outline-foreground")) {
 				colors[SchemeOut][ColFg] = argv[++i];
+			} else if (!strcmp(argv[i], "-pb") || !strcmp(argv[i], "--prompt-background")) {
+				colors[SchemePrompt][ColBg] = argv[++i];
+			} else if (!strcmp(argv[i], "-pf") || !strcmp(argv[i], "--prompt-foreground")) {
+				colors[SchemePrompt][ColFg] = argv[++i];
 			} else if (!strcmp(argv[i], "-bw") || !strcmp(argv[i], "--border-width")) {
 				border_width = atoi(argv[++i]);
 			} else if (!strcmp(argv[i], "-bc") || !strcmp(argv[i], "--border-color")) {
