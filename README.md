@@ -21,6 +21,7 @@ This fork incorporates several popular patches and enhancements to improve user 
 - [Line Height](patchs/dmenu-lineheight-5.2.diff): Custom height options for menu lines using `-h` / `--height`.
 - [Mouse Support](patchs/dmenu-mousesupport-5.4.diff): Select and interact with menu items using mouse clicks.
 - [Scroll Support](patchs/dmenu-scroll-20180607-a314412.diff): Seamless scrolling capability when items exceed the list limits.
+- [Inline Prompt](patchs/dmenu-inlinePrompt-20250821-d893c63.diff): Show the prompt as a placeholder inside the input field instead of displaying it before it. Enabled by default.
 - **Custom Width**: Custom window width setting using the `-W` / `--width` flag.
 - **Custom Font Size**: Specify a custom font size using the `-fs` / `--font-size` flag.
 - **Case-Insensitive Mode**: Toggle case-insensitivity at runtime using the `case_insensitive` parameter in config or command-line flags.
@@ -94,7 +95,7 @@ Clean object files and built binaries safely while keeping the `build/build` exe
   # or
   vmenu --print-config
   ```
-- **Generate Configuration File**: Write the default template to XDG config path or a custom path:
+- **Generate Configuration File**: Write the default template to XDG config path or a custom path (prompts for confirmation before overwriting if the file already exists):
   ```bash
   vmenu -g
   # or
