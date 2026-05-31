@@ -62,6 +62,10 @@ static Clr *scheme[SchemeLast];
 static int instant = 0;                     /* -n  option; if 1, select single entry automatically */
 static int centered = 0;                    /* -c  option; if 1, vmenu appears in center of screen */
 static int topbar = 1;                      /* -b  option; if 0, vmenu appears at bottom     */
+static int custom_x = 0;
+static int custom_y = 0;
+static int has_custom_x = 0;
+static int has_custom_y = 0;
 static int inline_prompt = 1;               /* 1 = show prompt as placeholder inside input field */
 /* -fn option overrides fonts[0]; default X11 font or font set */
 static const char *fonts[] = {
@@ -1056,8 +1060,8 @@ setup(void)
 			x = info[i].x_org + ((info[i].width  - mw) / 2);
 			y = info[i].y_org + ((info[i].height - mh) / 2);
 		} else {
-			x = info[i].x_org;
-			y = info[i].y_org + (topbar ? 0 : info[i].height - mh);
+			x = has_custom_x ? custom_x : info[i].x_org;
+			y = has_custom_y ? custom_y : info[i].y_org + (topbar ? 0 : info[i].height - mh);
 			mw = (custom_width > 0) ? MIN(custom_width, (int)info[i].width) : info[i].width;
 		}
 		XFree(info);
@@ -1073,8 +1077,8 @@ setup(void)
 			x = (wa.width  - mw) / 2;
 			y = (wa.height - mh) / 2;
 		} else {
-			x = 0;
-			y = topbar ? 0 : wa.height - mh;
+			x = has_custom_x ? custom_x : 0;
+			y = has_custom_y ? custom_y : topbar ? 0 : wa.height - mh;
 			mw = (custom_width > 0) ? MIN(custom_width, wa.width) : wa.width;
 		}
 	}
@@ -1161,6 +1165,8 @@ static const char default_config_content[] =
 	"\n"
 	"# Layout settings\n"
 	"width = 0\n"
+	"# x = 0\n"
+	"# y = 0\n"
 	"lines = 0\n"
 	"columns = 1\n"
 	"line_height = 0\n"
@@ -1328,6 +1334,12 @@ static void read_config(const char *path) {
 			centered = atoi(val);
 		} else if (strcmp(key, "topbar") == 0) {
 			topbar = atoi(val);
+		} else if (strcmp(key, "x") == 0) {
+			custom_x = atoi(val);
+			has_custom_x = 1;
+		} else if (strcmp(key, "y") == 0) {
+			custom_y = atoi(val);
+			has_custom_y = 1;
 		} else if (strcmp(key, "font") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0') {
@@ -1441,6 +1453,7 @@ usage(void)
 	    "             [-ip|--inline-prompt] [-nip|--no-inline-prompt]\n"
 	    "             [-g|--generate-config [path]] [-l|--lines lines]\n"
 	    "             [-G|--columns columns] [-h|--height height] [-W|--width width]\n"
+	    "             [-x x] [-y y]\n"
 	    "             [-p|--prompt prompt] [-fn|--font font] [-fs|--font-size size]\n"
 	    "             [-m|--monitor monitor]\n"
 	    "             [-nb|--normal-background color] [-nf|--normal-foreground color]\n"
@@ -1636,6 +1649,12 @@ main(int argc, char *argv[])
 				border_width = atoi(argv[++i]);
 			} else if (!strcmp(argv[i], "-bc") || !strcmp(argv[i], "--border-color")) {
 				colors[SchemeBorder][ColFg] = argv[++i];
+			} else if (!strcmp(argv[i], "-x")) {
+				custom_x = atoi(argv[++i]);
+				has_custom_x = 1;
+			} else if (!strcmp(argv[i], "-y")) {
+				custom_y = atoi(argv[++i]);
+				has_custom_y = 1;
 			} else if (!strcmp(argv[i], "-W") || !strcmp(argv[i], "--width")) {
 				custom_width = atoi(argv[++i]);
 			} else if (!strcmp(argv[i], "-w") || !strcmp(argv[i], "--window-id")) {
