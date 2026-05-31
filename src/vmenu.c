@@ -64,8 +64,6 @@ static int centered = 0;                    /* -c  option; if 1, vmenu appears i
 static int topbar = 1;                      /* -b  option; if 0, vmenu appears at bottom     */
 static int custom_x = 0;
 static int custom_y = 0;
-static int has_custom_x = 0;
-static int has_custom_y = 0;
 static int inline_prompt = 1;               /* 1 = show prompt as placeholder inside input field */
 /* -fn option overrides fonts[0]; default X11 font or font set */
 static const char *fonts[] = {
@@ -1060,8 +1058,8 @@ setup(void)
 			x = info[i].x_org + ((info[i].width  - mw) / 2);
 			y = info[i].y_org + ((info[i].height - mh) / 2);
 		} else {
-			x = has_custom_x ? custom_x : info[i].x_org;
-			y = has_custom_y ? custom_y : info[i].y_org + (topbar ? 0 : info[i].height - mh);
+			x = info[i].x_org + custom_x;
+			y = info[i].y_org + (topbar ? custom_y : info[i].height - mh - custom_y);
 			mw = (custom_width > 0) ? MIN(custom_width, (int)info[i].width) : info[i].width;
 		}
 		XFree(info);
@@ -1077,8 +1075,8 @@ setup(void)
 			x = (wa.width  - mw) / 2;
 			y = (wa.height - mh) / 2;
 		} else {
-			x = has_custom_x ? custom_x : 0;
-			y = has_custom_y ? custom_y : topbar ? 0 : wa.height - mh;
+			x = custom_x;
+			y = topbar ? custom_y : wa.height - mh - custom_y;
 			mw = (custom_width > 0) ? MIN(custom_width, wa.width) : wa.width;
 		}
 	}
@@ -1336,10 +1334,8 @@ static void read_config(const char *path) {
 			topbar = atoi(val);
 		} else if (strcmp(key, "x") == 0) {
 			custom_x = atoi(val);
-			has_custom_x = 1;
 		} else if (strcmp(key, "y") == 0) {
 			custom_y = atoi(val);
-			has_custom_y = 1;
 		} else if (strcmp(key, "font") == 0) {
 			char *parsed = parse_string(val);
 			if (parsed[0] != '\0') {
@@ -1651,10 +1647,8 @@ main(int argc, char *argv[])
 				colors[SchemeBorder][ColFg] = argv[++i];
 			} else if (!strcmp(argv[i], "-x")) {
 				custom_x = atoi(argv[++i]);
-				has_custom_x = 1;
 			} else if (!strcmp(argv[i], "-y")) {
 				custom_y = atoi(argv[++i]);
-				has_custom_y = 1;
 			} else if (!strcmp(argv[i], "-W") || !strcmp(argv[i], "--width")) {
 				custom_width = atoi(argv[++i]);
 			} else if (!strcmp(argv[i], "-w") || !strcmp(argv[i], "--window-id")) {
