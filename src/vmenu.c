@@ -166,6 +166,7 @@ cleanup(void)
 
 	if (dpy) {
 		XUngrabKeyboard(dpy, CurrentTime);
+		XUngrabPointer(dpy, CurrentTime);
 	}
 	for (i = 0; i < SchemeLast; i++) {
 		if (drw && scheme[i]) {
@@ -383,6 +384,23 @@ grabfocus(void)
 		nanosleep(&ts, NULL);
 	}
 	die("cannot grab focus");
+}
+
+static int
+grabpointer(void)
+{
+	struct timespec ts = { .tv_sec = 0, .tv_nsec = 1000000  };
+	int i;
+
+	if (embed)
+		return 1;
+	for (i = 0; i < 1000; i++) {
+		if (XGrabPointer(dpy, win, False, ButtonPressMask, GrabModeAsync,
+		                 GrabModeAsync, None, None, CurrentTime) == GrabSuccess)
+			return 1;
+		nanosleep(&ts, NULL);
+	}
+	return 0;
 }
 
 static int
@@ -784,8 +802,10 @@ buttonpress(XEvent *e)
 	XButtonPressedEvent *ev = &e->xbutton;
 	int x = border_width, y = border_width, h = bh, w;
 
-	if (ev->window != win)
-		return;
+	if (ev->window != win || ev->x < 0 || ev->x > mw || ev->y < 0 || ev->y > mh) {
+		cleanup();
+		exit(1);
+	}
 
 	/* right-click: exit */
 	if (ev->button == Button3)
@@ -1087,6 +1107,9 @@ setup(void)
 			XFree(dws);
 		}
 		grabfocus();
+	} else {
+		if (!grabpointer())
+			fprintf(stderr, "warning: cannot grab pointer\n");
 	}
 	drw_resize(drw, mw, mh);
 	drawmenu();
