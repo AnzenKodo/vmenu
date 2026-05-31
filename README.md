@@ -23,6 +23,7 @@ This fork incorporates several popular patches and enhancements to improve user 
 - [Scroll Support](patchs/dmenu-scroll-20180607-a314412.diff): Seamless scrolling capability when items exceed the list limits.
 - [Inline Prompt](patchs/dmenu-inlinePrompt-20250821-d893c63.diff): Show the prompt as a placeholder inside the input field instead of displaying it before it. Enabled by default.
 - **Custom Width**: Custom window width setting using the `-W` / `--width` flag.
+- **Custom Coordinates**: Specify custom window X and Y screen coordinates using the `-x` and `-y` flags (ignored if centered is enabled).
 - **Custom Font Size**: Specify a custom font size using the `-fs` / `--font-size` flag.
 - **Case-Insensitive Mode**: Toggle case-insensitivity at runtime using the `case_insensitive` parameter in config or command-line flags.
 - **Print Screen Pass-Through**: Releasing keyboard grab dynamically on Print Screen (`XK_Print`) press to let system screenshot tools run.
